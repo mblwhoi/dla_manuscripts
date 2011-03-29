@@ -1,5 +1,4 @@
 <?php
-// $Id: taxonomy_facets.install,v 1.13 2009/01/04 19:34:43 davidlesieur Exp $
 
 /**
  * Implementation of hook_schema().

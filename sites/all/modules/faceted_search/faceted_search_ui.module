@@ -1,5 +1,4 @@
 <?php
-// $Id: faceted_search_ui.module,v 1.85 2009/03/03 00:17:09 davidlesieur Exp $
 
 /**
  * @file
@@ -43,7 +42,8 @@ function faceted_search_ui_menu() {
     $env = faceted_search_env_load($env_id);
     $base_path = $env->settings['base_path'];
     $items[$base_path] = array(
-      'title' => check_plain($env->settings['title']), // Needed for breadcrumb.
+      'title callback' => 'faceted_search_ui_menu_title',
+      'title arguments' => array((string)$env_id),
       'page callback' => 'faceted_search_ui_stage_select',
       'page arguments' => array((string)$env_id),
       'access arguments' => array('use faceted search'),
@@ -121,7 +121,7 @@ function faceted_search_ui_block($op = 'list', $delta = 0, $edit = array()) {
     list($env_id, $delta) = explode('_', $delta, 2);
 
     $env = faceted_search_env_load($env_id);
-    if ($env->ui_state['stage'] == 'select' || ($env->ui_state['stage'] == 'facet' && $delta != 'sort')) {
+    if (!$env || $env->ui_state['stage'] == 'select' || ($env->ui_state['stage'] == 'facet' && $delta != 'sort')) {
       // We don't show blocks in this context.
       return;
     }
@@ -711,6 +711,18 @@ function faceted_search_ui_sort_block($search) {
 }
 
 /**
+ * Callback for the menu title.
+ */
+function faceted_search_ui_menu_title($env_id) {
+  $env = faceted_search_env_load($env_id);
+  $title = $env->settings['title'];
+  if (module_exists('i18nstrings')) {
+    $title = tt("faceted_search:$env_id:title", $title);
+  }
+  return check_plain($title);
+}
+
+/**
  * Sets the page title.
  */
 function faceted_search_ui_set_title($env) {
@@ -724,11 +736,15 @@ function faceted_search_ui_set_title($env) {
       }
     }
   }
+  $title = $env->settings['title'];
+  if (module_exists('i18nstrings')) {
+    $title = tt('faceted_search:'. $env->env_id .':title', $title);
+  }
   if (count($labels)) {
-    drupal_set_title(t('@title: !terms', array('@title' => $env->settings['title'], '!terms' => implode(', ', $labels))));
+    drupal_set_title(t('@title: !terms', array('@title' => $title, '!terms' => implode(', ', $labels))));
   }
   else {
-    drupal_set_title(check_plain($env->settings['title']));
+    drupal_set_title(check_plain($title));
   }
 }
 
@@ -786,7 +802,8 @@ function faceted_search_ui_form($form_state, $search) {
         $options[$filter->get_key()] = $filter->get_label();
       }
       else {
-        $options[$filter->get_key()] = t('in @field', array('@field' => $filter->get_label()));
+        // Note: get_label() is responsible for filtering its returned string.
+        $options[$filter->get_key()] = t('in !field', array('!field' => $filter->get_label()));
       }
     }
   }
@@ -916,7 +933,6 @@ function faceted_search_ui_form_submit($form, &$form_state) {
   }
 
   if ($new_text != '' && $form_state['values']['field'] != 'node') {
-    $escape_char = variable_get('faceted_search_escape_char', '\\');
     $new_text = $form_state['values']['field'] .':"'. faceted_search_quoted_query_escape($new_text) .'"';
   }
 
@@ -1354,6 +1370,7 @@ function theme_faceted_search_ui_categories($facet, $categories, $stage) {
 }
 
 function theme_faceted_search_ui_facet_label($facets, $index, $label) {
+  // Note: get_label() is responsible for filtering its returned string.
   $label = $facets[$index]->get_label();
   if (!empty($label)) {
     return '<h3>'. $label .'</h3>';

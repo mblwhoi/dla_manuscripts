@@ -1,5 +1,4 @@
 <?php
-// $Id: faceted_search.module,v 1.53 2009/03/03 05:13:12 davidlesieur Exp $
 
 /**
  * @file
@@ -150,6 +149,42 @@ function faceted_search_types($env) {
     }
   }
   return $types;
+}
+
+/**
+ * Implementation of hook_locale().
+ */
+function faceted_search_locale($op = 'groups', $group = NULL) {
+  switch ($op) {
+    case 'groups':
+      return array('faceted_search' => t('Faceted Search'));
+
+    case 'refresh':
+      if ($group == 'faceted_search') {
+        foreach (faceted_search_get_env_ids() as $env_id) {
+          $env = faceted_search_env_load($env_id);
+          faceted_search_env_locale_refresh($env);
+        }
+      }
+  }
+}
+
+/**
+ * Refresh the localized strings of an environment.
+ */
+function faceted_search_env_locale_refresh($env) {
+  if (module_exists('i18nstrings')) {
+    i18nstrings_update_string('faceted_search:'. $env->env_id .':title', $env->settings['title']);
+  }
+}
+
+/**
+ * Delete the localized strings of an environment.
+ */
+function faceted_search_env_locale_delete($env_id) {
+  if (module_exists('i18nstrings')) {
+    i18nstrings_remove_string('faceted_search:'. $env_id .':title');
+  }
 }
 
 /**
@@ -321,7 +356,7 @@ function faceted_search_quoted_query_insert($keys, $option, $value = '') {
   if ($escape_char == '\\') {
     $escape_char .= '\\'; // Special case for regex.
   }
-  if (search_query_extract($keys, $option)) {
+  if (!is_null(search_query_extract($keys, $option))) {
     $keys = trim(preg_replace('/(^| )'. $option .':"(('. $escape_char .'.|[^"])*?)"( |$)/i', ' ', $keys));
   }
   if ($value != '') {
@@ -422,9 +457,11 @@ function faceted_search_theme() {
   return array(
     'faceted_search_facets_settings' => array(
       'arguments' => array('form' => NULL),
+      'file' => 'faceted_search.admin.inc',
     ),
     'faceted_search_keyword_filters_settings' => array(
       'arguments' => array('form' => NULL),
+      'file' => 'faceted_search.admin.inc',
     ),
     'faceted_search_keyword_and_label' => array(
       'arguments' => array('keyword' => NULL),
@@ -439,86 +476,6 @@ function faceted_search_theme() {
       'arguments' => array('keyword' => NULL),
     ),
   );
-}
-
-function theme_faceted_search_facets_settings($form) {
-  uasort($form, '_faceted_search_element_sort');
-
-  $output = '';
-  $header = array('', t('Facet'), t('Type'), t('Weight'), t('Sort criteria'), t('Categories limit'));
-  $rows_enabled = array(array('', '<em>'. t('Enabled facets') .'</em>', '', '', '', ''));
-  $rows_disabled = array(array('', '<em>'. t('Disabled facets') .'</em>', '', '', '', ''));
-  foreach (element_children($form) as $key) {
-    unset($form[$key]['status']['#title']);
-    unset($form[$key]['weight']['#title']);
-    unset($form[$key]['max_categories']['#title']);
-    unset($form[$key]['sort']['#title']);
-    $row = array(
-      drupal_render($form[$key]['status']),
-      $form[$key]['#title'] . ($form[$key]['help']['#value'] ? ' ('. check_plain($form[$key]['help']['#value']) .')' : ''),
-      drupal_render($form[$key]['type']),
-      drupal_render($form[$key]['weight']),
-      drupal_render($form[$key]['sort']),
-      drupal_render($form[$key]['max_categories']),
-    );
-    if ($form[$key]['status']['#value']) {
-      $rows_enabled[] = $row;
-    }
-    else {
-      $rows_disabled[] = $row;
-    }
-  }
-
-  if (count($rows_enabled) > 1 && count($rows_disabled) > 1) {
-    $rows = array_merge($rows_enabled, $rows_disabled);
-  }
-  elseif (count($rows_enabled) > 1) {
-    $rows = $rows_enabled;
-  }
-  else {
-    $rows = $rows_disabled;
-  }
-  $output .= theme('table', $header, $rows);
-  $output .= drupal_render($form);
-  return $output;
-}
-
-function theme_faceted_search_keyword_filters_settings($form) {
-  uasort($form, '_faceted_search_element_sort');
-
-  $output = '';
-  $header = array('', t('Field'), t('Weight'));
-  $rows_enabled = array(array('', '<em>'. t('Enabled fields') .'</em>', ''));
-  $rows_disabled = array(array('', '<em>'. t('Disabled fields') .'</em>', ''));
-  foreach (element_children($form) as $key) {
-    unset($form[$key]['status']['#title']);
-    unset($form[$key]['weight']['#title']);
-    unset($form[$key]['type']);
-    $row = array(
-      drupal_render($form[$key]['status']),
-      $form[$key]['#title'] . ($form[$key]['help']['#value'] ? ' ('. check_plain($form[$key]['help']['#value']) .')' : ''),
-      drupal_render($form[$key]['weight']),
-    );
-    if ($form[$key]['status']['#value']) {
-      $rows_enabled[] = $row;
-    }
-    else {
-      $rows_disabled[] = $row;
-    }
-  }
-
-  if (count($rows_enabled) > 1 && count($rows_disabled) > 1) {
-    $rows = array_merge($rows_enabled, $rows_disabled);
-  }
-  elseif (count($rows_enabled) > 1) {
-    $rows = $rows_enabled;
-  }
-  else {
-    $rows = $rows_disabled;
-  }
-  $output .= theme('table', $header, $rows);
-  $output .= drupal_render($form);
-  return $output;
 }
 
 function theme_faceted_search_keyword_and_label($keyword) {
@@ -538,111 +495,6 @@ function theme_faceted_search_keyword_or_label($keywords) {
 
 function theme_faceted_search_keyword_not_label($keyword) {
   return '-'. check_plain($keyword);
-}
-
-/**
- * Build a form for a filter's settings.
- *
- * @param $form
- *   The form to modify.
- * @param $filters
- *   The filters whose settings are to be added.
- */
-function _faceted_search_filter_settings_form(&$form, $filters) {
-  foreach ($filters as $filter) {
-    $key = $filter->get_key() .'_'. $filter->get_id();
-    $form[$key] = array(
-      '#title' => $filter->get_label(),
-      '#weight' => $filter->get_weight(),
-    );
-    $form[$key]['filter_key'] = array(
-      '#type' => 'value',
-      '#value' => $filter->get_key(),
-    );
-    $form[$key]['filter_id'] = array(
-      '#type' => 'value',
-      '#value' => $filter->get_id(),
-    );
-    $form[$key]['help'] = array(
-      '#type' => 'value',
-      '#value' => $filter->get_help(),
-    );
-    $form[$key]['status'] = array(
-      '#title' => t('Enabled'),
-      '#type' => 'checkbox',
-      '#default_value' => $filter->get_status(),
-    );
-    if ($filter->get_key() == 'node') {
-      $form[$key]['status']['#value'] = TRUE;
-      $form[$key]['status']['#disabled'] = TRUE;
-    }
-    $form[$key]['type'] = array(
-      '#type' => 'markup',
-      '#value' => check_plain($filter->get_key()),
-    );
-    $form[$key]['weight'] = array(
-      '#title' => t('Weight'),
-      '#type' => 'textfield',
-      '#default_value' => $filter->get_weight(),
-      '#maxlength' => 4,
-      '#size' => 4,
-      '#required' => TRUE,
-    );
-  }
-  return $form;
-}
-
-/**
- * Build a form for a facet's settings.
- *
- * @param $form
- *   The form to modify.
- * @param $filters
- *   The filters whose settings are to be added.
- */
-function _faceted_search_facet_settings_form(&$form, $filters) {
-  $form = _faceted_search_filter_settings_form($form, $filters);
-  foreach ($filters as $filter) {
-    $key = $filter->get_key() .'_'. $filter->get_id();
-
-    // Sort criteria.
-    $sort_options = $filter->get_sort_options();
-    if (count($sort_options)) {
-      $form[$key]['sort'] = array(
-        '#title' => t('Sort criteria for categories'),
-        '#type' => 'select',
-        '#default_value' => $filter->get_sort(),
-        '#options' => $sort_options,
-      );
-    }
-    else {
-      $form[$key]['sort'] = array(
-        '#type' => 'markup',
-        '#value' => t('n/a'),
-      );
-    }
-
-    // Number of categories to show.
-    $form[$key]['max_categories'] = array(
-      '#title' => t('Number of categories to show in guided search'),
-      '#type' => 'select',
-      '#options' => array(
-        0 => t('All categories'),
-        5 => t('Up to 5 categories'),
-        10 => t('Up to 10 categories'),
-        15 => t('Up to 15 categories'),
-        20 => t('Up to 20 categories'),
-        25 => t('Up to 25 categories'),
-        30 => t('Up to 30 categories'),
-        40 => t('Up to 40 categories'),
-        50 => t('Up to 50 categories'),
-        100 => t('Up to 100 categories'),
-      ),
-      '#default_value' => $filter->get_max_categories(),
-    );
-  }
-
-  return $form;
 }
 
 /**

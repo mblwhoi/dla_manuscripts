@@ -1,5 +1,4 @@
 <?php
-// $Id: taxonomy_facets.module,v 1.38 2009/03/03 04:55:34 davidlesieur Exp $
 
 /**
  * @file
@@ -228,7 +227,7 @@ function taxonomy_facets_faceted_search_collect(&$facets, $domain, $env, $select
  */
 function taxonomy_facets_form_faceted_search_edit_form_alter(&$form, $form_state) {
   // Prepend submit function (must be called before the settings are saved).
-  $form['#submit'] = array('taxonomy_facets_edit_form_submit' => array()) + $form['#submit'];
+  $form['#submit'] = array_merge(array('taxonomy_facets_edit_form_submit'), $form['#submit']);
 }
 
 /**

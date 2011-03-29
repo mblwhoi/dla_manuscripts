@@ -1,5 +1,4 @@
 <?php
-// $Id: faceted_search_ui.inc,v 1.4 2008/09/28 01:04:28 davidlesieur Exp $
 
 /**
  * @file

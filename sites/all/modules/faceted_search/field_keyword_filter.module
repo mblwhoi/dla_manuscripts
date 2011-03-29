@@ -1,5 +1,4 @@
 <?php
-// $Id: field_keyword_filter.module,v 1.4 2009/01/04 23:00:01 davidlesieur Exp $
 
 /**
  * @file
@@ -19,7 +18,7 @@ function field_keyword_filter_faceted_search_collect(&$filters, $domain, $env, $
         $filter_key = field_indexer_type($field['fiid']);
         // If the field's corresponding filter is allowed.
         if (!isset($selection) || isset($selection[$filter_key]['keyword'])) {
-          $filters[] = new faceted_search_keyword_filter($filter_key, $field['label']);
+          $filters[] = new field_keyword_filter($filter_key, $field['label']);
         }
       }
       break;
@@ -32,7 +31,7 @@ function field_keyword_filter_faceted_search_collect(&$filters, $domain, $env, $
         if (!isset($selection) || isset($selection[$filter_key]['keyword'])) {
           // Scan the given search text for a '{key}:"{value}"' token, and create
           // filters from it.
-          if ($found_text = faceted_search_quoted_query_extract($arg, $filter_key)) {
+          if (!is_null($found_text = faceted_search_quoted_query_extract($arg, $filter_key))) {
             $keys = faceted_search_parse_keywords($found_text);
 
             // Create the filters.
@@ -89,5 +88,12 @@ class field_keyword_filter extends faceted_search_keyword_filter {
     }
     return '';
   }
-
+  
+  /**
+   * Return the label of this filter. This method is responsible for ensuring
+   * adequate security filtering.
+   */
+  function get_label() {
+    return filter_xss_admin(t($this->_label)); // Note: Using t() with non-literal, as does CCK.
+  }
 }

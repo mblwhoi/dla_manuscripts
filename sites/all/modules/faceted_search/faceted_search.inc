@@ -1,5 +1,4 @@
 <?php
-// $Id: faceted_search.inc,v 1.57 2009/01/04 19:36:25 davidlesieur Exp $
 
 /**
  * @file
@@ -901,7 +900,11 @@ class faceted_search {
     $this->settings['types'] = array();
 
     // Provide other modules an opportunity to add their own default settings.
-    module_invoke_all('faceted_search_init', $this);
+    $hook = 'faceted_search_init';
+    foreach (module_implements($hook) as $module) {
+      $function = $module .'_'. $hook;
+      $function($this);
+    }
   }
 
   /**
@@ -1162,7 +1165,11 @@ class faceted_search {
 
     // Give other modules an opportunity at altering the final query (e.g. for
     // additional filtering).
-    module_invoke_all('faceted_search_query_alter', $this, $query);
+    $hook = 'faceted_search_query_alter';
+    foreach (module_implements($hook) as $module) {
+      $function = $module .'_'. $hook;
+      $function($this, $query);
+    }
 
     // Perform the search results query and store results in a temporary table.
     //
@@ -1241,7 +1248,11 @@ class faceted_search {
       // There is no results table at this point, so we can't rely on the
       // results table having been filtered already. Therefore, we ask modules
       // to alter the categories query instead.
-      module_invoke_all('faceted_search_query_alter', $this, $query);
+      $hook = 'faceted_search_query_alter';
+      foreach (module_implements($hook) as $module) {
+        $function = $module .'_'. $hook;
+        $function($this, $query);
+      }
     }
     elseif ($this->_results_count > 0) {
       // Search within results.

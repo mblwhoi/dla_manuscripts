@@ -1,0 +1,10 @@
+<?php
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function publishing_options_facets_uninstall() {
+  if (db_table_exists('faceted_search_filters')) {
+    db_query("DELETE FROM {faceted_search_filters} WHERE filter_key IN ('sticky', 'status', 'promote', 'moderate')");
+  }
+}

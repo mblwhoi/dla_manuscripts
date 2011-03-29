@@ -1,5 +1,4 @@
 <?php
-// $Id: field_keyword_filter.install,v 1.1 2008/05/29 22:14:50 davidlesieur Exp $
 
 /**
  * Implementation of hook_uninstall().

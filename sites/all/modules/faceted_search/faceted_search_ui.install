@@ -1,5 +1,4 @@
 <?php
-// $Id: faceted_search_ui.install,v 1.8 2009/01/10 21:02:23 davidlesieur Exp $
 
 /**
  * Implementation of hook_uninstall().

@@ -1,4 +1,3 @@
-// $Id: jquery.faceted_search_ui.js,v 1.8 2008/01/17 20:50:16 davidlesieur Exp $
 
 /**
  * Provides tooltips with subcategories when hovering categories, through AJAX.

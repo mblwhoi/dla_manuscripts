@@ -1,5 +1,4 @@
 <?php
-// $Id: date_authored_facet.module,v 1.13 2009/01/04 19:36:25 davidlesieur Exp $
 
 /**
  * @file

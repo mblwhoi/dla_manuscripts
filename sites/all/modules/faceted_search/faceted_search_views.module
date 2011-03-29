@@ -1,5 +1,4 @@
 <?php
-// $Id: faceted_search_views.module,v 1.18 2009/03/03 00:22:41 davidlesieur Exp $
 
 /**
  * @file
@@ -44,6 +43,21 @@ function faceted_search_views_views_query_alter (&$view, &$query) {
 }
 
 /**
+ * Implementation of hook_views_pre_execute().
+ */
+function faceted_search_views_views_pre_execute(&$view) {
+  if (is_array($view->args[0]) && isset($view->args[0]['faceted_search']) && $view->current_display == 'default') {    
+    if (empty($view->pager['items_per_page'])) {
+      // Make sure a limit is set.
+      $view->set_items_per_page(variable_get('default_nodes_main', 10));
+    }
+    if (empty($view->pager['use_pager'])) {
+      $view->set_use_pager(TRUE);
+    }
+  }
+}
+
+/**
  * Provides a view-based display style for search results.
  */
 class faceted_search_views_style extends faceted_search_ui_style {
@@ -68,19 +82,6 @@ class faceted_search_views_style extends faceted_search_ui_style {
   }
 
   /**
-   * Return the number of nodes per page.
-   */
-  function get_limit() {
-    $view = views_get_view($this->_name);
-       
-    if ($view->display['default']->display_options['items_per_page'] > 0) {
-      return $view->display['default']->display_options['items_per_page'];
-    }
-    // The pager is mandatory for search results, thus a valid limit required.
-    return variable_get('default_nodes_main', 10);
-  }
-
-  /**
    * Apply the view's count query as a subquery to filter the search results.
    *
    * Note: We use the view's count query for this purpose because we don't need
@@ -95,6 +96,7 @@ class faceted_search_views_style extends faceted_search_ui_style {
     $views_query = db_rewrite_sql($view->build_info['count_query'], $view->base_table, $view->base_field, array('view' => &$view));
     $views_args = $view->build_info['query_args'];
     $views_replacements = module_invoke_all('views_query_substitutions', $view);
+    $views_query = str_replace(array_keys($views_replacements), $views_replacements, $views_query);
     if (is_array($views_args)) {
       foreach ($views_args as $id => $arg) {
         $views_args[$id] = str_replace(array_keys($views_replacements), $views_replacements, $arg);
@@ -107,7 +109,18 @@ class faceted_search_views_style extends faceted_search_ui_style {
    * Format the search results according to this style's desire.
    */
   function format_results($search) {
-    return views_embed_view($this->_name, 'default' , array('faceted_search' => $search));
+    if ($view = views_get_view($this->_name)) {
+      if ($view->access('default')) {
+        $output = views_embed_view($this->_name, 'default' , array('faceted_search' => $search)); 
+        $view->destroy();
+      }
+      else {
+        $view->destroy();
+        drupal_access_denied();
+        exit();
+      }      
+    }         
+    return $output;
   }
 }
 

@@ -1,4 +1,3 @@
-$Id: README.txt,v 1.47 2009/03/02 22:45:10 davidlesieur Exp $
 
 README file for the Faceted Search Drupal module.
 
@@ -76,10 +75,15 @@ Faceted Search is in fact a bundle of modules.
 - Taxonomy Facets: Allows users to search content through taxonomy. Any
   vocabulary can become a facet that can be used to refine the current search.
 
-- Date Facets Format: Provides formatting options for date-based facets.
-
 - Field Keyword Filter: Allows to perform keyword searches restricted by field
   (requires the Field Indexer module).
+
+- Publishing Options Facets: Allows users to refine the current search based on
+  content publishing options (sticky, published, promoted to front page,
+  moderated). This is mostly useful in search environments built specifically
+  for site editors.
+
+- Date Facets Format: Provides formatting options for date-based facets.
 
 Hopefully, many more facets will be developed. The API is meant to make it easy
 to implement new facets.
@@ -269,6 +273,7 @@ view in the "Display style" field of the "Results page" section.
 
 Known limitations:
 
+- Only a view's default display can be used (other displays are ignored).
 - The view cannot use exposed filters or arguments.
 - The view's "Title" and "Empty text" settings are ignored.
 - If the view is set to have an unlimited number of items per page, instead of

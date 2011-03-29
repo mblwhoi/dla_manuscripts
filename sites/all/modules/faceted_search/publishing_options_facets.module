@@ -1,0 +1,210 @@
+<?php
+
+/**
+ * @file
+ * Provides facets for publishing options.
+ */
+
+require_once('./'. drupal_get_path('module', 'faceted_search') .'/faceted_search.inc');
+
+/**
+ * Implementation of hook_faceted_search_collect().
+ */
+function publishing_options_facets_faceted_search_collect(&$facets, $domain, $env, $selection, $arg = NULL) {
+
+  $publishing_options = array(
+    'sticky'   => t('Sticky'),
+    'status'   => t('Published'),
+    'promote'  => t('Front page'),
+    'moderate' => t('Moderated'),
+  );
+
+  switch ($domain) {
+    case 'facets':
+      // If the Publishing Options facet is allowed.
+      foreach ($publishing_options as $publishing_option => $label) {
+        if (!isset($selection) || isset($selection[$publishing_option][1])) {
+          $facets[] = new publishing_options_facet($publishing_option, $label);
+        }
+      }
+      break;
+
+    case 'text':
+      // If the Publishing Options facet is allowed.
+      foreach ($publishing_options as $publishing_option => $label) {
+        if (!isset($selection) || isset($selection[$publishing_option][1])) {
+
+          // Scan the search text for a 'type:state' token, and extract a
+          // facet from it.
+          if ($state = search_query_extract($arg, $publishing_option)) {
+            // Create a facet with the state found in search text as the active
+            // category.
+            if (($state == 'y') || ($state == 'n')) {
+              $facets[] = new publishing_options_facet($publishing_option, $label, $state);
+            }
+            // Remove the parsed token from the search text.
+            $arg = search_query_insert($arg, $publishing_option);
+          }
+        }
+      }
+      return $arg;
+
+    case 'node':
+      // If the Publishing Options facet is allowed.
+      foreach ($publishing_options as $publishing_option => $label) {
+        if (!isset($selection) || isset($selection[$publishing_option][1])) {
+          // Create a facet with the node's state as the active category.
+          $facets[] = new publishing_options_facet($publishing_option, $label, $arg->$publishing_option ? 'y' : 'n');
+        }
+      }
+      break;
+  }
+}
+
+/**
+ * A publishing option based facet.
+ */
+class publishing_options_facet extends faceted_search_facet {
+
+  var $_option_name;
+  var $_label;
+
+  /**
+   * Constructor. Optionally assigns the active state of the facet.
+   *
+   * @param $state
+   *   Optional. State to set as this facet's active category.
+   */
+  function publishing_options_facet($option_name, $label, $state = NULL) {
+    $this->_option_name = $option_name;
+    $this->_label = $label;
+    $active_path = array();
+    if ($state) {
+      $active_path[] = new publishing_options_facet_category($this->_option_name, $state);
+    }
+    parent::faceted_search_facet($this->_option_name, $active_path);
+  }
+
+  function get_id() {
+    return 1; // There is only one instance of this facet
+  }
+
+  function get_label() {
+    return $this->_label;
+  }
+
+  /**
+   * Returns the available sort options for this facet.
+   */
+  function get_sort_options() {
+    $options = parent::get_sort_options();
+    $options['value'] = t('Value');
+    return $options;
+  }
+
+  /**
+   * Handler for the 'count' sort criteria.
+   */
+  function build_sort_query_count(&$query) {
+    $query->add_orderby('count', 'DESC');
+    $query->add_orderby("n_{$this->_option_name}", 'ASC');
+  }
+
+  /**
+   * Handler for the 'value' sort criteria.
+   */
+  function build_sort_query_value(&$query) {
+    $query->add_orderby("n_{$this->_option_name}", 'DESC');
+  }
+
+  /**
+   * Return the search text for this facet, taking into account this facet's
+   * active path.
+   */
+  function get_text() {
+    if ($category = $this->get_active_category()) {
+      return $category->_status; // This call breaks encapsulation...
+    }
+    return '';
+  }
+
+  /**
+   * Updates a query for retrieving the root categories of this facet and their
+   * associated nodes within the current search results.
+   *
+   * @param $query
+   *   The query object to update.
+   *
+   * @return
+   *   FALSE if this facet can't have root categories.
+   */
+  function build_root_categories_query(&$query) {
+    $query->add_field('n', $this->_option_name);
+    $query->add_groupby("n_{$this->_option_name}");
+    return TRUE;
+  }
+
+  /**
+   * This factory method creates categories given query results that include the
+   * fields selected in get_root_categories_query() or get_subcategories_query().
+   *
+   * @param $results
+   *   $results A database query result resource.
+   *
+   * @return
+   *   Array of categories.
+   */
+  function build_categories($results) {
+    $categories = array();
+    while ($result = db_fetch_object($results)) {
+      $column = "n_{$this->_option_name}";
+      $categories[] = new publishing_options_facet_category($this->_option_name, $result->$column ? 'y' : 'n', $result->count);
+    }
+    return $categories;
+  }
+}
+
+/**
+ * A publishing option based facet category.
+ */
+class publishing_options_facet_category extends faceted_search_category {
+
+  var $_option_name;
+  var $_status = '';
+
+  /**
+   * Constructor.
+   */
+  function publishing_options_facet_category($option_name, $status, $count = NULL) {
+    parent::faceted_search_category($count);
+    $this->_option_name = $option_name;
+    $this->_status = $status;
+  }
+
+  /**
+   * Return the label of this category.
+   *
+   * @param $html
+   *   TRUE when HTML is allowed in the label, FALSE otherwise. Checking this
+   *   flag allows implementors to provide a rich-text label if desired, and an
+   *   alternate plain text version for cases where HTML cannot be used. The
+   *   implementor is responsible to ensure adequate security filtering.
+   */
+  function get_label($html = FALSE) {
+    if ($this->_status == 'y') {
+      return t('Yes');
+    }
+    return t('No');
+  }
+
+  /**
+   * Updates a query for selecting nodes matching this category.
+   *
+   * @param $query
+   *   The query object to update.
+   */
+  function build_results_query(&$query) {
+    $query->add_where("n.{$this->_option_name} = '%s'", $this->_status == 'y' ? 1 : 0);
+  }
+}
+

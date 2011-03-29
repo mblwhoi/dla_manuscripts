@@ -1,5 +1,4 @@
 <?php
-// $Id: content_type_facet.install,v 1.9 2009/01/04 19:36:25 davidlesieur Exp $
 
 /**
  * Implementation of hook_uninstall().

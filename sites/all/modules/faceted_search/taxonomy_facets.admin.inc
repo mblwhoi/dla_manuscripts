@@ -1,5 +1,4 @@
 <?php
-// $Id: taxonomy_facets.admin.inc,v 1.1 2008/12/29 18:09:38 davidlesieur Exp $
 
 /**
  * @file

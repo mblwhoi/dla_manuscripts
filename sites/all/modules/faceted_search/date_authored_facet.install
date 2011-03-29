@@ -1,5 +1,4 @@
 <?php
-// $Id: date_authored_facet.install,v 1.5 2008/08/26 04:28:10 davidlesieur Exp $
 
 /**
  * Implementation of hook_uninstall().
