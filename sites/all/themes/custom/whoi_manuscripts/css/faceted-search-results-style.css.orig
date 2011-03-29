@@ -1,0 +1,69 @@
+/* styling for facets search results */
+
+
+.view-facet-search-results{
+}
+
+/* class for properly sizing parents of float elements */
+
+.view-facet-search-results .clearfix:after {
+    clear:both;
+    content:".";
+    display:block;
+    height:0;
+    visibility:hidden;
+}
+
+.facet_search_results_row{
+    padding-top: 1em;
+    padding-bottom: 1em;
+}
+
+.facet_search_results_row > .content{
+    float: left;
+    position: relative;
+    font-weight: normal;
+    font-size: inherit;
+    font-style: normal;
+    text-decoration: none;
+}
+
+.facet_search_results_row > .content{
+    float: none;
+    padding-left: 0;
+}
+
+.facet_search_results_row > .content > .dates > .content{
+    margin-left: .5em;
+}
+
+.facet_search_results_row > .head{
+    font-weight: bold;
+    font-size: larger;
+}
+
+.facet_search_results_row .content * .head{
+    font-weight: normal;
+    font-size: inherit;
+    font-style: italic;
+}
+
+.facet_search_results_row .content .container > .box, .facet_search_results_row .content .container > .folder{
+    float: left;
+    margin-bottom: inherit;
+    margin-right: 1em;
+}
+
+
+.view-manuscript-search-results > .content > .view-content > .row.first{
+    margin-top: none;
+}
+
+.view-manuscript-search-results > .view-content > .views-row > .panel-display > .panel-col-top > div > .views-field-title{
+    font-size: 150%;
+    margin-left: 1em;
+}
+
+.view-manuscript-search-results > .view-content > .views-row > .panel-display > .panel-col-bottom > div{
+    margin-left: 2em;
+}

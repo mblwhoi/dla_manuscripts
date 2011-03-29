@@ -1,0 +1,262 @@
+<?php
+// $Id: fsrange_admin.module,v 1.1.2.1 2009/09/09 13:21:28 zyxware Exp $
+
+/**
+ * @file
+ * Administer range facets.
+ */
+
+/**
+ * Implementation of hook_help().
+ */
+function fsrange_admin_help($section) {
+  switch($section) {
+    case 'admin/settings/faceted_search/ranges':
+      return '<p>'. t('This page shows all of the <em>range factes</em> that are currently defined on this system. Range facets allow your users to easily find nodes whose fields fall whithin certain ranges of values. For example, if you have a numeric field holding the <em>price of a product</em>, you can define a <em>Price</em> facet consisting of three ranges of values (for cheap products, medium priced products, and expensive products). Once range facets are defined, you can, like with any other facet, add them to your <em>search environment</em>.') .'</p>';
+    case 'admin/settings/faceted_search/ranges/add':
+      return '<p>'. t('First, select the field whose values will be used for the new range facet.') .'</p>';
+  }
+}
+
+/**
+ * Implementation of hook_menu().
+ */
+function fsrange_admin_menu() {
+  $items = array();
+
+  $items['admin/settings/faceted_search/ranges'] = array(
+    'title' => t('Range facets'),
+    'page callback' => 'fsrange_list_page',
+    'access arguments' => array('administer site configuration'),
+    'type' => MENU_LOCAL_TASK,
+  );
+  
+  $items['admin/settings/faceted_search/ranges/list'] = array(
+    'title' => t('List'),
+    'weight' => -10,
+    'page callback' => 'fsrange_list_page',
+    'access arguments' => array('administer site configuration'),
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+  );
+
+  $items['admin/settings/faceted_search/ranges/add'] = array(
+    'title' => t('Define a new range facet'),
+    'page callback' => 'fsrange_add',
+    'access arguments' => array('administer site configuration'),
+    'type' => MENU_LOCAL_TASK,
+  );
+  
+  $items['admin/settings/faceted_search/ranges/delete'] = array(
+    'title' => t('Delete range'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('fsrange_delete_form'),
+    'access arguments' => array('administer site configuration'),
+    'type' => MENU_CALLBACK,
+  );
+
+  // We define the '../edit/#' tab dynamically --that is, in !$may_cache-- because
+  // we want it to show only on edit pages.
+//  if (strpos($_GET['q'], 'admin/settings/faceted_search/ranges/edit/') === 0) {
+//    $items[$_GET['q']] = array(
+//      'title' => t('Edit range facet'),
+//      'page callback' => 'fsrange_edit',
+//      'page arguments' => array(arg(5)),
+//      'access arguments' => array('administer site configuration'),
+//      'type' => MENU_LOCAL_TASK,
+//    );
+//  }
+  
+
+  $items['admin/settings/faceted_search/ranges/edit/%'] = array(
+    'title' => t('Edit range facet'),
+    'page callback' => 'fsrange_edit',
+    'page arguments' => array(5),
+    'access arguments' => array('administer site configuration'),
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * An overview page that lists all the range facets defined on this system.
+ */
+function fsrange_list_page() {
+  $header = array(t('Label'), t('Description'), t('Used in'), t('Field'), t('Operations'));
+  $rows = array();
+  foreach (fsrange_facets() as $facet) {
+    $operations = array(
+      array('title' => t('Edit'), 'href' => 'admin/settings/faceted_search/ranges/edit/'. $facet['rfid']),
+      array('title' => t('Delete'), 'href' => 'admin/settings/faceted_search/ranges/delete/'. $facet['rfid']),
+    );
+    // Find all environments where this facet is used.
+    $environments = array();
+    $res = db_query("SELECT env_id FROM {faceted_search_filters} WHERE filter_key = '%s' AND status = 1", _fsrange_key($facet));
+    while ($env = db_fetch_object($res)) {
+      //$name = faceted_search_variable_get($env->env_id, 'name', NULL);
+      $name = db_result (db_query("SELECT name FROM {faceted_search_env} WHERE env_id = '%s'", $env->env_id));
+      $environments[] = array('title' => $name, 'href' => 'admin/settings/faceted_search/'. $env->env_id);
+    }
+    $rows[] = array(
+      filter_xss_admin($facet['label']),
+      check_plain($facet['description']),
+      theme('links', $environments),
+      $facet['field_name'],
+      theme('links', $operations),
+    );
+  }
+  if ($rows) {
+    return theme('table', $header, $rows);
+  }
+  else {
+    return '<p><em>'. t('No range factes have currently been defined.') .'</em></p>';
+  }
+}
+
+/**
+ * Delete a facet.
+ */
+function fsrange_delete_form(&$form_state, $rfid) {
+  $facet = fsrange_facets($rfid);
+  $form['rfid'] = array(
+    '#type' => 'value',
+    '#value' => $rfid,
+  );
+  $form = confirm_form(
+    $form,
+    t('Are you sure you want to delete %facet?', array('%facet' => $facet['label'])),
+    'admin/settings/faceted_search/ranges',
+    t('This action cannot be undone.'),
+    t('Delete'),
+    t('Cancel')
+  );
+  return $form;
+}
+
+/**
+ * Handle the submit button to delete a facet.
+ */
+function fsrange_delete_form_submit(&$form, $form_state) {
+  fsrange_delete($form_state['values']['rfid']);
+  drupal_goto ('admin/settings/faceted_search/ranges');
+}
+
+function fsrange_add($field_name = NULL) {
+  if ($field_name) {
+    $range['field_name'] = $field_name;
+    return drupal_get_form('fsrange_edit_form', $range);
+  }
+  else {
+    return drupal_get_form('fsrange_add_form');
+  }
+}
+
+function fsrange_add_form() {
+  $form['field_name'] = array(
+    '#type' => 'select',
+    '#options' => _fsrange_fields_select(),
+  );
+  if (!$form['field_name']['#options']) {
+    $form['error'] = array(
+      '#value' => '<p><em>'. t('Error: no module reports suitable fields we can use. Did you forget to enable any of the supporting modules? Please go to your modules page and enable any or all of "Numeric Range Facets", "Textual Range Facets" or "Date Range Facets".') .'</em></p>',
+    );
+  }
+  $form['submit'] = array(
+    '#type' => 'submit',
+    // The ellipsis is to hint this is only the first stage.
+    '#value' => t('Define a range facet...'),
+  );
+  return $form;
+}
+
+function fsrange_add_form_submit(&$form, $form_state) {
+  // Redirect to the facet editing form
+  drupal_goto ('admin/settings/faceted_search/ranges/add/'. $form_state['values']['field_name']);
+}
+
+/**
+ * Returns all the range-capable fields defined on this system, sorted nicely,
+ * for use in a 'select' form element.
+ */
+function _fsrange_fields_select() {
+  $options = array();
+  foreach (fsrange_fields() as $field_name => $field) {
+    $options[$field['group']][$field_name] = $field['label'];
+  }
+  uksort($options, '_fsrange_strncmp');
+  foreach ($options as $group => $fields) {
+    uasort($options[$group], '_fsrange_strncmp');
+  }
+  return $options;
+}
+
+// Case-insensitive string compare function, to use as callback for
+// uasort(), asort() and the like.
+function _fsrange_strncmp($a, $b) {
+  $a = drupal_strtolower($a);
+  $b = drupal_strtolower($b);
+  if ($a == $b) {
+    return 0;
+  }
+  return ($a < $b) ? -1 : 1;
+}
+
+function fsrange_edit($rfid) {
+  $facet = fsrange_facets($rfid);
+  return drupal_get_form('fsrange_edit_form', $facet);
+}
+
+function fsrange_edit_form(&$form_state, $facet) {
+  $options = isset($facet['options']) ? $facet['options'] : NULL;
+  $handler = fsrange_instantiate_handler($facet['field_name'], $options);
+  if (!$handler) {
+    $form['message'] = array(
+      '#value' => t('I cannot handle this range facet. The module providing it might have been disabled. You may wish to delete this facet, or to re-enable the module.'), 
+    );
+    return $form;
+  }
+  $form['help'] = array(
+    '#value' => '<p>'. t('You are editing a range facet which uses the %field-title field for its values.',  array('%field-title' => $handler->definition['label'])) .'</p>',
+  );
+  $form['field_name'] = array(
+    '#type' => 'value',
+    '#value' => $facet['field_name'],
+  );
+  $form['rfid'] = array(
+    '#type' => 'value',
+    '#value' => isset($facet['rfid']) ? $facet['rfid'] : 0,
+  );
+  $form['label'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Label'),
+    '#description' => t('The label shown to users; e.g., "Price".'),
+    '#default_value' => isset($facet['label']) ? $facet['label'] : '',
+    '#required' => TRUE,
+  );
+  $form['description'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Description'),
+    '#description' => t('The description of this range facet, for site administrators only; e.g., "product price partitioned into 3 ranges". Users will <em>not</em> see this description.'),
+    '#default_value' => isset($facet['description']) ? $facet['description'] : '',
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#weight' => 1000,
+    '#value' => t('Save'),
+  );
+  // We call the handler last so that it has a change to modify the above form.
+  $handler->options_form($form);
+  return $form;
+}
+
+function fsrange_edit_form_validate(&$form, $form_state) {
+  $handler = fsrange_instantiate_handler($form_state['values']['field_name']);
+  $handler->options_validate($form_state['values']);
+}
+
+function fsrange_edit_form_submit(&$form, $form_state) {
+  $handler = fsrange_instantiate_handler($form_state['values']['field_name'], $form_state['values']);
+  fsrange_save_facet($form_state['values']['rfid'], $form_state['values']['field_name'], $form_state['values']['label'], $form_state['values']['description'], $handler->options);
+  drupal_goto ('admin/settings/faceted_search/ranges');
+}
+

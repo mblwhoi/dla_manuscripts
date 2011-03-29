@@ -1,0 +1,69 @@
+<div class="facet_search_results_row">
+
+   <div class="head">
+     <!-- display different title links depending on if node is an EAD collection or an EAD component -->
+   
+     <?php 
+       if($row->node_type == 'ead_collection'){
+         print $fields['title_1']->content;
+       }
+       elseif($row->node_type == 'ead_component'){
+         print $fields['title']->content;
+       }
+     ?>
+
+   </div>
+
+   <div class="content">
+
+     <?php if($fields['field_ead_description_value']->content):?>
+       <div class="abstract">
+         <?php print $fields['field_ead_abstract_value']->content;?>
+       </div>
+     <?php endif;?>
+
+     <div class="context">
+       <span class="head">
+         <?php print $fields['tid']->label . ":"; ?>
+       </span>
+       <span class="content">
+         <?php print $fields['tid']->content;?>   
+       </span>
+     </div>
+
+     <div class="dates">
+       <span class="head">
+         Dates:
+       </span>
+       <span class="content">
+         <?php print $fields['field_ead_dates_value']->content;?>
+       </span>
+     </div>
+
+     <?php if($fields['field_ead_component_box_value']->content || $fields['field_ead_component_folder_value']->content):?>
+       <div class="container clearfix">
+         <span class="box">
+           <span class="head">
+             Box:
+           </span>
+           <span class="content">
+            <?php print $fields['field_ead_component_box_value']->content;?>
+           </span>
+         </span>
+
+         <span class="folder">
+           <span class="head">
+             Folder:
+           </span>
+           <span class="content">
+            <?php print $fields['field_ead_component_folder_value']->content;?>
+           </span>
+       </div>
+     <?php endif;?>
+         
+   </div>
+
+</div>
+
+
+

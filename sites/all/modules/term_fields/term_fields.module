@@ -1,0 +1,783 @@
+<?php
+// $Id: term_fields.module,v 1.7.2.19 2010/10/28 11:06:22 bprod Exp $
+
+/**
+ * Implementation of hook_menu().
+ */
+function term_fields_menu() {
+  $items['admin/content/taxonomy/term_fields'] = array(
+    'title' => 'Fields',
+    'page callback' => 'term_fields_admin',
+    'description' => 'An overview of term fields.',
+    'access arguments' => array('administer term fields'),
+    'type' => MENU_LOCAL_TASK,
+    'file' => 'term_fields.admin.inc',
+  );
+  $items['admin/content/taxonomy/term_fields/list'] = array(
+    'title' => 'List Fields',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => -50,
+  );
+  $items['admin/content/taxonomy/term_fields/new'] = array(
+    'title' => 'Add field',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('term_fields_admin_new'),
+    'description' => 'Form used to create new term fields.',
+    'access arguments' => array('administer term fields'),
+    'type' => MENU_LOCAL_TASK,
+    'file' => 'term_fields.admin.inc',
+  );
+  $items['admin/content/taxonomy/term_fields/settings'] = array(
+    'title' => 'Settings',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('term_fields_admin_settings'),
+    'description' => 'Form used to change field settings.',
+    'access arguments' => array('administer term fields'),
+    'type' => MENU_LOCAL_TASK,
+    'file' => 'term_fields.admin.inc',
+  );
+  $items['admin/content/taxonomy/term_fields/edit/%fid'] = array(
+    'title' => 'Edit field',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('term_fields_admin_edit', 5),
+    'description' => 'Form used to edit term fields.',
+    'access arguments' => array('administer term fields'),
+    'type' => MENU_CALLBACK,
+    'file' => 'term_fields.admin.inc',
+  );
+  $items['admin/content/taxonomy/term_fields/delete/%fid'] = array(
+    'title' => 'Delete field',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('term_fields_admin_delete', 5),
+    'description' => 'Form used to delete term fields.',
+    'access arguments' => array('administer term fields'),
+    'type' => MENU_CALLBACK,
+    'file' => 'term_fields.admin.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Implementation of hook_perm().
+ */
+function term_fields_perm() {
+  return array('administer term fields');
+}
+
+/**
+ * Implementation of hook_form_FORM_ID_alter().
+ */
+function term_fields_form_taxonomy_form_term_alter(&$form, &$form_state) {
+  // We don't want our form to appear on the deletion confirmation screen.
+  if (!(isset($_POST['op']) && $_POST['op'] == t('Delete')) || isset($_POST['confirm'])) {
+    // Shortcuts
+    $tid = $form['tid']['#value'];
+    $vid = $form['vid']['#value'];
+
+    // Make the initial fieldset.
+    $form['fields'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Term fields'),
+      '#collapsed' => TRUE,
+      '#collapsible' => TRUE,
+      '#weight' => 1,
+    );
+
+    // Get all fields for this vocabulary.
+    $fields = term_fields_get_rows($vid);
+
+    if (!empty($fields)) {
+      // Render the fields.
+      foreach ($fields as $fid => $field) {
+        $value = db_result(db_query("SELECT %s FROM {term_fields_term} WHERE tid = %d", $fid, $tid));
+
+        // Some values are going to be conditional based on the data type.
+        switch ($field->type) {
+          case 'checkbox':
+            $form['fields'][$fid] = array(
+              '#type' => $field->type,
+              '#default_value' => $value ? $value : 0,
+              '#description' => $field->description,
+            );
+            break;
+          case 'textfield':
+            $form['fields'][$fid] = array(
+              '#type' => $field->type,
+              '#size' => 70,
+              '#max_length' => 100,
+              '#default_value' => $value ? $value : NULL,
+              '#description' => $field->description,
+            );
+            break;
+
+          case 'textarea':
+            $form['fields'][$fid] = array(
+              '#type' => $field->type,
+              '#rows' => 5,
+              '#cols' => 60,
+              '#default_value' => $value ? $value : NULL,
+              '#description' => $field->description,
+            );
+            break;
+
+          case 'numeric':
+            $form['fields'][$fid] = array(
+              '#type' => 'textfield',
+              '#size' => 2,
+              '#default_value' => isset($value) ? $value : NULL,
+              '#description' => $field->description,
+            );
+            break;
+
+          case 'select':
+            $options = unserialize($field->options);
+            $options = array('' => '') + $options;
+            $form['fields'][$fid] = array(
+              '#type' => 'select',
+              '#options' => $options,
+              '#default_value' => $value || $value == 0 ? $value : NULL,
+              '#description' => $field->description,
+            );
+            break;
+
+          case 'date':
+            $default_value = date_parse($value);
+            $form['fields'][$fid] = array(
+              '#type' => $field->type,
+              '#default_value' => $default_value ? $default_value : NULL,
+              '#element_validate' => array('term_fields_date_validate'),
+              '#description' => $field->description,
+            );
+            break;
+
+          case 'file':
+            $form['fields'][$fid] = array(
+              '#type' => 'file',
+            );
+            $current_file_fid = db_result(db_query("SELECT %s FROM {term_fields_term} WHERE tid = %d", $fid, $tid));
+            if ($current_file_fid) {
+              $form['fields'][$fid . '_delete'] = array(
+                '#type' => 'checkbox',
+                '#title' => t('Delete'),
+              );
+            }
+            $form['#attributes']['enctype'] = 'multipart/form-data';
+            break;
+        }
+
+        // These fields will always be the same.
+        $form['fields'][$fid]['#title'] = t('@title (@fid)', array('@title' => $field->title, '@fid' => $fid));
+        $form['fields'][$fid]['#description'] = check_plain($field->description);
+
+        // File fields are strange.
+        if ($value && $field->type == 'file') {
+          $file = db_fetch_object(db_query("SELECT * FROM {files} WHERE fid = %d", $value));
+          $form['fields'][$fid]['#description'] .= '<br />' . t('Current file: <a href="@filepath">@filename</a>.', array('@filename' => $file->filename, '@filepath' => base_path() . $file->filepath));
+        }
+
+        // We're going to make some alterations to any date fields that exist.
+        $form['#after_build'] = array('term_fields_alter_date');
+      }
+    }
+    else {
+      $form['fields']['empty'] = array(
+        '#type' => 'item',
+        '#value' => t('There are no fields defined for the vocabulary that this term is a part of.'),
+      );
+    }
+
+    $form['submit']['#weight'] = 10;
+    $form['delete']['#weight'] = 10;
+  }
+}
+
+/**
+ * Implementation of hook_taxonomy().
+ */
+function term_fields_taxonomy($op, $type, $form_values) {
+  // Shortcuts
+  $tid = $form_values['tid'];
+  $vid = $form_values['vid'];
+
+  switch ($type) {
+    case 'term':
+      // Get all fields used by this vocabulary.
+      $fields = term_fields_get_rows($vid);
+
+      if ($op != 'delete') {
+        // If for some reason we are presented with a $form_values array that does not contain
+        // all the fields for this vocabulary, then we need not be here.
+        foreach ($fields as $field) {
+          if (!isset($form_values[$field->fid])) {
+            return;
+          }
+        }
+      }
+
+      if (!empty($fields)) {
+        // Map field values.
+        $values = array();
+
+        foreach ($fields as $field) {
+          $value = $form_values[$field->fid];
+
+          switch ($field->type) {
+            case 'date':
+              $values[$field->fid] = $value['year'] . '-' . $value['month'] . '-' . $value['day'];
+              break;
+
+            case 'file':
+              $current_file_fid = db_result(db_query("SELECT %s FROM {term_fields_term} WHERE tid = %d", $field->fid, $tid));
+              $current_file = db_fetch_object(db_query("SELECT * FROM {files} WHERE fid = %d", $current_file_fid));
+              if ($form_values[$field->fid . '_delete']) {
+                // Delete from database.
+                db_query("DELETE FROM {files} WHERE fid = %d", $current_file_fid);
+                // Remove from file system.
+                file_delete($current_file->filepath);
+
+                $values[$field->fid] = 0;
+              }
+              else {
+                $options = unserialize($field->options);
+                if (!isset($options['file_max_size'])) {
+                  $file_max_size = 1;
+                }
+
+                if (isset($options['file_allowed_exts'])) {
+                  $file_allowed_exts = implode(' ', $options['file_allowed_exts']);
+                }
+                else {
+                  $file_allowed_exts = 'txt';
+                }
+
+                $validators = array(
+                  'file_validate_size' => array($file_max_size * 1024 * 1024),
+                  'file_validate_extensions' => array($file_allowed_exts),
+                );
+
+                if ($file = file_save_upload($field->fid, $validators, file_directory_path())) {
+                  file_set_status($file, 1);
+                  if ($current_file_fid) {
+                    // get rid of old file
+                    db_query("DELETE FROM {files} WHERE fid = %d", $current_file_fid);
+                    file_delete($current_file->filepath);
+                  }
+                  $values[$field->fid] = $file->fid;
+                }
+              }
+              break;
+
+            default:
+              $values[$field->fid] = $value;
+              break;
+          }
+        }
+
+        // Some simple clean up and validation.
+        foreach ($values as $fid => $value) {
+          $type = $fields[$fid]->type;
+          switch ($type) {
+            case 'numeric':
+              // Validate if the entered value is numeric.
+              if (!is_numeric($value) && $value != '') {
+                drupal_set_message(t('Field %fid must be numeric. This field was not set.', array('%fid' => $fid)), 'error');
+                unset($values[$fid]);
+              }
+              // User have *not* entered a value into a numeric field. Remove the
+              // field from the list or an insert/update of an empty string into
+              // an integer field will fail.
+              elseif (!is_numeric($value) && $value == '') {
+                unset($values[$fid]);
+              }
+              break;
+          }
+        }
+
+        // If there are no values to set then we need to get out of here.
+        // The exception being if the term is being deleted.
+        if ($op != 'delete' && count($values) == 0) {
+          break;
+        }
+
+        switch ($op) {
+          case 'insert':
+            term_fields_term_create_record($tid, $values);
+            break;
+
+          case 'update':
+            // See if there is a record for this term already.
+            // If so, update it. If not, insert a new record.
+            $result = db_query("SELECT tid FROM {term_fields_term} WHERE tid = %d", $tid);
+            if (term_fields_fetch_fields($result)) {
+              // Update the existing record.
+              term_fields_term_update_record($tid, $values);
+            }
+            else {
+              // Insert a new record.
+              term_fields_term_create_record($tid, $values);
+            }
+            break;
+
+          case 'delete':
+            db_query("DELETE FROM {term_fields_term} WHERE tid = %d", $tid);
+        }
+      }
+      break;
+
+    case 'vocabulary':
+      switch ($op) {
+        case 'delete':
+          $fids = term_fields_get_fids($vid);
+          if (!empty($fids)) {
+            foreach ($fids as $fid) {
+              db_drop_field($ret, 'term_fields_term', $fid);
+            }
+            db_query("DELETE FROM {term_fields} WHERE vid = %d", $vid);
+          }
+          break;
+      }
+  }
+}
+
+/**
+ * Retrieve a single field value given a term ID and field ID.
+ */
+function term_fields_get_field($tid, $fid) {
+  return db_result(db_query("SELECT %s FROM {term_fields_term} WHERE tid = %d", $fid, $tid));
+}
+
+/**
+ * Retrieve an array of fields from a given term, keyed by field ID.
+ */
+function term_fields_get_fields($term) {
+  if ($fids = term_fields_get_fids($term->vid)) {
+    $field_list = implode(',', $fids);
+    $sql = 'SELECT ' . $field_list .  ' FROM {term_fields_term} WHERE tid = %d';
+    $result = db_query($sql, $term->tid);
+
+    return db_fetch_array($result);
+  }
+
+  return NULL;
+}
+
+/**
+ * Retrieve a term object like taxonomy_get_term(), but with fields.
+ */
+function term_fields_get_term($tid) {
+  $term = taxonomy_get_term($tid);
+  $fields = term_fields_get_fields($term);
+  $term->fields = $fields;
+
+  return $term;
+}
+
+/**
+ * Implementation of hook_views_api().
+ */
+function term_fields_views_api() {
+  return array(
+    'api' => 2,
+    'path' => drupal_get_path('module', 'term_fields') . '/views',
+  );
+}
+
+/**
+ * Get a list of field IDs.
+ */
+function term_fields_get_fids($vid = NULL) {
+  $fields = array();
+
+  if ($vid) {
+    $result = db_query("SELECT fid FROM {term_fields} WHERE vid = %d", $vid);
+  }
+  else {
+    $result = db_query("SELECT fid FROM {term_fields}");
+  }
+  while ($data = db_fetch_object($result)) {
+    $fields[] = $data->fid;
+  }
+
+  return $fields;
+}
+
+/**
+ * Get all values from rows in the term_fields table.
+ */
+function term_fields_get_rows($vid = NULL) {
+  if ($vid && is_numeric($vid)) {
+    $result = db_query("SELECT * FROM {term_fields} WHERE vid = %d ORDER BY weight ASC", $vid);
+  }
+  else {
+    $result = db_query("SELECT * FROM {term_fields} ORDER BY vid ASC, weight ASC");
+  }
+
+  $rows = array();
+  while ($data = db_fetch_object($result)) {
+    $fid = $data->fid;
+    $rows[$fid] = $data;
+  }
+
+  return $rows;
+}
+
+/**
+ * Get all values from a single row in the term_fields table.
+ */
+function term_fields_get_row($fid) {
+  return db_fetch_object(db_query("SELECT * FROM {term_fields} WHERE fid = '%s'", $fid));
+}
+
+/**
+ * Insert a record in the term_field_term table.
+ */
+function term_fields_term_create_record($tid, $values) {
+  // Create a comma separted list of fields to be used in the query.
+  $fields = array_keys($values);
+  $field_list = implode(', ', $fields);
+
+  // Create a list of placeholders so db_query() can do it's thing.
+  $placeholders = '';
+  foreach ($values as $value) {
+    $placeholders = $placeholders . (is_numeric($value) ? "%d, " : "'%s', ");
+  }
+  $placeholders = rtrim($placeholders, ', ');
+
+  // Put the term id at the beginning of the array.
+  array_unshift($values, $tid);
+
+  // go go go
+  $sql = 'INSERT INTO {term_fields_term} (tid, ' . $field_list . ') VALUES (%d, ' . $placeholders . ')';
+  db_query($sql, $values);
+}
+
+/**
+ * Update an existing record in the term_fields_term table.
+ */
+function term_fields_term_update_record($tid, $values) {
+
+  // Create a list of fields and their respective placeholders for db_query().
+  $placeholders = '';
+  foreach ($values as $fid => $value) {
+    $placeholders = $placeholders . $fid . ' = ' . (is_numeric($value) ? "%d, " : "'%s', ");
+  }
+  $placeholders = rtrim($placeholders, ', ');
+
+  // Add the tid on to the end of the array.
+  array_push($values, $tid);
+
+  // Construct and execute.
+  $sql = 'UPDATE {term_fields_term} SET ' . $placeholders . ' WHERE tid = %d';
+  db_query($sql, $values);
+}
+
+/**
+ * #after_build function to pop a blank value to the top of date fields.
+ */
+function term_fields_alter_date($form, $form_element) {
+  $result = db_query("SELECT fid FROM {term_fields} WHERE type = '%s' AND vid = %d", 'date', $form['vid']['#value']);
+  if (db_affected_rows()) {
+    $date_ids = array();
+    while ($data = db_fetch_object($result)) {
+      $date_ids[] = $data->fid;
+    }
+    foreach ($date_ids as $did) {
+      // Add blank values to each select list
+      $blank = array(0 => '');
+      $form['fields'][$did]['year']['#options'] = $blank + $form['fields'][$did]['year']['#options'];
+      $form['fields'][$did]['month']['#options'] = $blank + $form['fields'][$did]['month']['#options'];
+      $form['fields'][$did]['day']['#options'] = $blank + $form['fields'][$did]['day']['#options'];
+
+      // Give titles to each list.
+      $form['fields'][$did]['year']['#title'] = t('Year');
+      $form['fields'][$did]['month']['#title'] = t('Month');
+      $form['fields'][$did]['day']['#title'] = t('Day');
+    }
+  }
+
+  return $form;
+}
+
+/**
+ * Validator for date fields.
+ */
+function term_fields_date_validate($element, &$form_state) {
+  $year = $element['year']['#value'];
+  $month = $element['month']['#value'];
+  $day = $element['day']['#value'];
+
+  // We allow the user to unset date fields by leaving all fields (day, month AND year) blank.
+  // They can only have either all 3 of them set, or all 3 of them unset.
+  if (empty($year) || empty($month) || empty($day)) {
+    if (!(empty($year) && empty($month) && empty($day))) {
+      form_set_error($element['#name'], t('A value must be specified for month, day and year. If you want to make this field blank, unset all three fields.'));
+    }
+  }
+}
+
+/**
+ * Loader function for fid argument.
+ */
+function fid_load($fid) {
+  if ($fid) {
+    $fids = term_fields_get_fids();
+    if (in_array($fid, $fids)) {
+      return $fid;
+    }
+  }
+
+  return FALSE;
+}
+
+/**
+ * Helper function to modify the datetime object in the database to whatever format the user chooses.
+ */
+function term_fields_format_date($date) {
+  $format = variable_get('term_fields_date_format', 'd/m/Y');
+  $format_custom = variable_get('term_fields_date_format_custom', '');
+  if (!empty($date) && $date != "0000-00-00 00:00:00") {
+    $datetime = date_create($date);
+    if ($format_custom) {
+      $date = date_format($datetime, $format_custom);
+    }
+    else {
+      $date = date_format($datetime, $format);
+    }
+    return $date;
+  }
+  else {
+    return '';
+  }
+}
+
+/**
+ * Helper function to determine if there are any fields defined, and return them
+ * in an array usable by theme_table if so.
+ */
+function term_fields_fetch_fields($result) {
+  $rows = array();
+  while ($data = db_fetch_object($result)) {
+    $rows[$data->fid]['title'] = t('@title (@fid)', array('@title' => $data->title, '@fid' => $data->fid));
+    $rows[$data->fid]['vocab'] = check_plain($data->name);
+    $rows[$data->fid]['desc'] = check_plain($data->description);
+    $rows[$data->fid]['edit'] = l(t('Edit'), 'admin/content/taxonomy/term_fields/edit/' . $data->fid);
+  }
+
+  return !empty($rows) ? $rows : 0;
+}
+
+/**
+ * Implementation of hook_nodeapi().
+ */
+function term_fields_nodeapi(&$node, $op, $teaser = NULL, $page = NULL) {
+  if (in_array($op, array('view', 'prepare', 'print')) && ! empty($node->taxonomy)) {
+
+    // When previewing, we can't modify $node->taxonomy, otherwise
+    // it will interfere with taxonomy_link() function, which is supposed
+    // to receive term tids and not term objects.
+    // That's why we use hook_link_alter(), which is called by taxonomy_link()
+    // function in its very end, to recover a normally filled $node->taxonomy
+    // array. So all should work fine if any term field piece of information
+    // is used in a node template file (or in a phptemplate_preprocess_node
+    // function like, which is a better way to interfere with templates).
+    if (isset($node->build_mode) && $node->build_mode == NODE_BUILD_PREVIEW) {
+
+      // If previewing, the terms must be converted to objects first.
+      $node->taxonomy_preview = taxonomy_preview_terms($node);
+      $taxonomy = &$node->taxonomy_preview;
+    }
+    else {
+      $taxonomy = &$node->taxonomy;
+    }
+
+    foreach ($taxonomy as &$term) {
+      if (is_object($term)) {
+        $term->fields = term_fields_get_fields($term);
+      }
+    }
+
+    // Clear reference.
+    unset($taxonomy);
+  }
+}
+
+/**
+ * Implementation of hook_link_alter().
+ *
+ * We use this hook in a non-standard way. Actually it permits to use
+ * the extra information added by term fields module to $node->taxonomy
+ * in preview mode.
+ * We would prefer to do that differently, but it don't seem to be possible
+ * without patching taxonomy module (taxonomy_link() function), which is a
+ * worse method.
+ */
+function term_fields_link_alter(&$links, $node) {
+  if (isset($node->taxonomy_preview)) {
+    // Use array_merge_recursive in case of some other modules deals with
+    // $node->taxonomy.
+    $node->taxonomy = array_merge_recursive($node->taxonomy_preview, $node->taxonomy);
+    unset($node->taxonomy_preview);
+  }
+}
+
+/**
+ * Implementation of hook_token_values().
+ */
+function term_fields_token_values($type, $object = NULL, $options = array()) {
+  $tokens = $terms = array();
+
+  // When dealing with node, we have to check if the term fields have
+  // already benn loaded (nodeapi operations: 'view', 'presave', 'print').
+  // If not (operation 'presave'), we have to buils the fields array for
+  // each field.
+  if ($type == 'node' && ! (empty($object->taxonomy))) {
+    $check = reset($object->taxonomy);
+
+    // Fields have been loaded.
+    if (is_object($check)) {
+      $function = create_function('$term', 'return isset($term->fields) ? $term->fields : array();');
+      $terms = array_map($function, $object->taxonomy);
+    }
+    // Nodeapi presave operation. This case is important, especially if the
+    // Pathauto module is used.
+    else {
+      // Tags
+      if (isset($object->taxonomy['tags'])) {
+        $tags = $object->taxonomy['tags'];
+        unset($object->taxonomy['tags']);
+
+        foreach ($tags as $vid => $tag) {
+          $names = drupal_explode_tags($tag);
+
+          foreach ($names as $name) {
+            $tid = NULL;
+
+            foreach (taxonomy_get_term_by_name($name) as $term) {
+              if ($term->vid == $vid) {
+                $tid = $term->tid;
+              }
+            }
+
+            if (! isset($terms[$term->tid])) {
+              $terms[$term->tid] = term_fields_get_fields($term);
+            }
+          }
+        }
+      }
+
+      // Vocabularies
+      foreach ($object->taxonomy as $vid => $term) {
+        if (is_array($term)) {
+          foreach ($term as $tid) {
+            if ($tid && ! isset($terms[$tid])) {
+              $dummy_term = (object) array('tid' => $tid, 'vid' => $vid);
+              $terms[$tid] = term_fields_get_fields($dummy_term);
+            }
+          }
+        }
+        elseif (is_object($term)) {
+          if (! isset($terms[$term->tid])) {
+            $terms[$term->tid] = term_fields_get_fields($term);
+          }
+        }
+        elseif ($term) {
+          $dummy_term = (object) array('tid' => $term, 'vid' => $vid);
+          $terms[$term] = term_fields_get_fields($dummy_term);
+        }
+      }
+    }
+  }
+  // Taxonomy
+  elseif ($type == 'taxonomy') {
+    $terms[$object->tid] = term_fields_get_fields($object);
+  }
+
+  if (in_array($type, array('taxonomy', 'node'))) {
+    foreach (term_fields_get_rows() as $fid => $field) {
+      if ($field->type != 'textarea' && $field->type != 'date') {
+        $value = '';
+
+        if ($terms) {
+          $function = create_function('$term', 'return isset($term["'. $field->fid .'"]) ? $term["'. $field->fid .'"] : NULL;');
+          if ($values = array_filter(array_map($function, $terms))) {
+            $value = implode(',', $values);
+          }
+        }
+
+        $tokens['field-' . $fid] = check_plain($value);
+        $tokens['field-' . $fid . '-raw'] = $value;
+      }
+    }
+  }
+
+  return $tokens;
+}
+
+/**
+ * Implementation of hook_token_list().
+ */
+function term_fields_token_list($type = 'all') {
+  if ($type == 'taxonomy' || $type == 'node' || $type == 'all') {
+    $tokens = array();
+    $fields = term_fields_get_rows();
+    foreach ($fields as $fid => $field) {
+      if ($field->type != 'textarea' && $field->type != 'date') {
+        $tokens['term_fields']['field-' . $fid] = t('@description', array('@description' => $field->description));
+        $tokens['term_fields']['field-' . $fid . '-raw'] = t('@description - *RAW*', array('@description' => $field->description));
+      }
+    }
+    return $tokens;
+  }
+}
+
+/**
+ * Function returns db field configuratin
+ *
+ * @param string $type type of term field
+ * @return array
+ *
+ */
+function term_fields_get_db_conf($type) {
+   $result = array();
+  // Determine which data type to use for the new column.
+  switch ($type) {
+    case 'checkbox':
+      $result = array('type' => 'int', 'size' => 'tiny', 'default' => 0);
+      break;
+    case 'textfield':
+    case 'textarea':
+    case 'select':
+      $result = array('type' => 'text', 'size' => 'big');
+      break;
+
+    case 'numeric':
+    case 'file':
+      $result = array('type' => 'int');
+      break;
+
+    case 'date':
+      $result = array('type' => 'datetime');
+      break;
+  }
+  return $result;
+}
+
+function term_fields_get_children($tid, $vid = 0, $key = 'tid') {
+  $children = taxonomy_get_children($tid, $vid, $key);
+  $result = array();
+  foreach ($children as $child) {
+    $result[] = term_fields_get_term($child->$key);
+  }
+  return $result;
+}
+
+/**
+ * Implementation hook_schema_alter()
+ */
+function term_fields_schema_alter(&$schema) {
+  $fields = term_fields_get_rows();
+  foreach ($fields as $field) {
+    $schema['term_fields_term']['fields'][$field->fid] = term_fields_get_db_conf($field->type);
+  }
+}

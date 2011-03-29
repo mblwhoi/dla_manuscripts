@@ -1,0 +1,66 @@
+<?php
+// $Id: computed_facets.module,v 1.2 2009/05/01 20:35:18 davidlesieur Exp $
+
+/**
+ * @file
+ * Exposes CCK Computed fields as facets.
+ */
+
+module_load_include('inc', 'cck_facets');
+
+/**
+ * Implementation of hook_cck_facets_collect().
+ */
+function computed_facets_cck_facets_collect(&$facets, $field, $domain, $env, $arg = NULL) {
+  if ($field['type'] == 'computed' && $field['store']) {
+    switch ($domain) {
+      case 'facets':
+        $facets[] = new computed_facet($field);
+        break;
+
+      case 'text':
+        // Scan the given search text for a '{field_name}:"{value}"'
+        // token, and create facets from it.
+        if (!is_null($computed = faceted_search_quoted_query_extract($arg, $field['field_name']))) {
+          // Create an active facet with the value found in the search text.
+          $category = new cck_facet_category($field, $computed);
+          $facets[] = new computed_facet($field, array($category));
+          // Remove the parsed text
+          $arg = faceted_search_quoted_query_insert($arg, $field['field_name']);
+        }
+        break;
+
+      case 'node':
+        if (isset($arg->{$field['field_name']}) && is_array($arg->{$field['field_name']})) {
+          // Iterate through the field's multiple values.
+          foreach ($arg->{$field['field_name']} as $item) {
+            $value = array_shift($item);
+            if ($value != '') {
+              $category = new cck_facet_category($field, $value);
+              $facets[] = new computed_facet($field, array($category));
+            }
+          }
+        }
+        break;
+    }
+  }
+  return $arg;
+}
+
+/**
+ * A facet for CCK Computed fields.
+ */
+class computed_facet extends cck_facet {
+  
+  function computed_facet($field, $active_path = array()) {
+    parent::cck_facet($field, $active_path);
+  }
+
+  function get_text() {
+    if ($category = $this->get_active_category()) {
+      // Quote and escape the value.
+      return '"'. faceted_search_quoted_query_escape($category->_value) .'"';
+    }
+    return '';
+  }
+}

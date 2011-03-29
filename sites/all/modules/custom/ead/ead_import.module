@@ -1,0 +1,314 @@
+<?php
+// $Id$
+
+/**
+* @file
+* Module for importing EAD files into Drupal
+*
+*/
+
+
+/**
+ * Implementation of hook_feeds_plugins().
+ */
+function ead_import_feeds_plugins() {
+
+
+  module_load_include('inc', 'ead_import', 'ead_import.feeds_plugins');
+
+  // call breakout function
+  return _ead_import_feeds_plugins();
+
+}
+
+
+/**
+ * Implementation of hook_feeds_import_default
+ */
+function ead_import_feeds_importer_default() {
+
+  module_load_include('inc', 'ead_import', 'ead_import.feeds_importer_default');
+
+  // call breakout function
+  return _ead_import_feeds_importer_default();
+}
+
+
+
+/**
+ * Implementation of hook_ctools_plugin_api w/ ctools
+ */
+function ead_import_ctools_plugin_api($module = '', $api = '') {
+  if ($module == "feeds" && $api == "feeds_importer_default") {
+    // The current API version is 1.
+    return array("version" => 1);
+  }
+}
+
+
+
+/**
+ * Implementation of hook_views_api().
+ */
+function ead_import_views_api() {
+  return array('api' => '2.0');
+}
+
+
+/**
+ * Implementation of hook_node_api().
+ */
+function ead_import_nodeapi(&$node, $op, $form) {
+
+  // handle ead collections
+  if ($node->type === "ead_collection") {
+
+    if($importer_id = feeds_get_importer_id($node->type)){
+      switch ($op) {
+        case 'validate':
+          break;
+        case 'presave':
+          break;
+        case 'insert':
+          break;
+        case 'update':
+          break;
+        case 'delete':
+
+          // Using Batch API (user will see a progress bar).
+          //feeds_batch_set(t('Deleting'), 'clear', $importer_id, $node->nid);
+
+          // Not using Batch API
+          while (FEEDS_BATCH_COMPLETE != feeds_source($importer_id, $node->nid)->clear()){
+            // reset the time limit so that we don't time out the server
+            // note: this depends on the server allowing this function
+            // something like this in .htaccess:
+            // php_flag safe_mode off
+            set_time_limit(30);
+          }
+          break;
+      }
+    }
+  }
+
+}
+
+
+
+/*
+function ead_import_form_node_delete_confirm_alter(&$form, &$form_state){
+  
+  $form['#submit'] = array("ead_import_handler");
+
+  return $form;
+
+}
+*/
+
+
+/*
+ * Alter collection node form to change title of feed form section
+ * We do this in form alter to do it *after* feeds_form_alter.
+ */
+function ead_import_form_alter(&$form, &$form_state, $form_id){
+  if ($form_id == 'ead_collection_node_form'){
+
+    // change the feeds form section's title
+    $form['feeds']['#title'] = "EAD Source File";
+
+    // hide form elements
+    // NOTE: THIS SHOULD REALLY BE IN THEMING
+    $elements_to_hide = array(
+      'title',
+      'body_field',
+      'revision_information',
+      'author',
+      'options',
+      'field_ead_creator',
+      'field_ead_dates',
+      'field_ead_collection_id',
+      'field_ead_abstract',
+      'path',
+      'menu',
+      'taxonomy',
+      'comment',
+    );
+
+    foreach ($elements_to_hide as $element){
+      $form[$element]['#prefix'] = '<span style="display:none;">';
+      $form[$element]['#suffix'] = '</span>';
+    }
+
+  }
+}
+
+
+/*
+ * Alter feeds import tab form for collection node text for EAD
+ * feeds.
+ */
+function ead_import_form_feeds_import_tab_form_alter(&$form, &$form_state){
+
+  // change the page title
+  drupal_set_title("Reprocess EAD File?");
+
+  // change the description
+  $form['description']['#value'] = 'Caution: This will replace the current collection\'s online content.';
+
+  // change the submit button text
+  $form['actions']['submit']['#value'] = 'Reprocess';
+
+  // submit to a custom ingest submission function
+  $form['#submit'] = array('ead_import_ingest_ead_tab_form_submit');
+
+}
+
+
+
+/*
+ * Chain together feed clear and import calls in one submission function
+ */
+function ead_import_ingest_ead_tab_form_submit(&$form, &$form_state){
+
+  $form_state['redirect'] = $form['#redirect'];
+  $feed_nid = empty($form['#feed_nid']) ? 0 : $form['#feed_nid'];
+
+  $batch = array(
+    'title' => 'Reprocessing EAD File',
+    'operations' => array(
+      array('feeds_batch', array('clear', $form['#importer_id'], $feed_nid)),
+      array('feeds_batch', array('import', $form['#importer_id'], $feed_nid)),
+    ),
+    'progress_message' => '',
+  );
+
+  batch_set($batch);
+
+}
+
+
+/*
+ * Alter menu buttons at top of ead collection node forms to remove
+ * extraneous items.
+ * We do this *after* feeds_form_alter via module weights.
+ */
+
+function ead_import_menu_alter(&$items) {
+
+  // change the text of the import button
+  $items['node/%node/import']['title'] = 'Reprocess EAD File';
+
+  // remove the delete items button
+  unset($items['node/%node/delete-items']);
+}
+
+function ead_import_handler(&$form, &$form_state){
+
+  // check the batch.  If we're done with the batch,
+
+  // create a batch to clear collection components via feeds_batch,
+  // and then redirect to the node_delete_confirm_submit function
+
+  // get the node
+  $node = node_load($form_state['values']['nid']);  
+
+  // get the importer id
+  $importer_id = feeds_get_importer_id($node->type);
+
+  $batch = array(
+    'title' => 'Deleting collection',
+    'operations' => array(
+      array('ead_import_batch_set_context', array($node->nid)),
+      array('feeds_batch', array('clear', $importer_id, $node->nid)),
+      //array('node_delete_confirm_submit', $form, $form_state),
+      //array('ead_import_batch_callback', array($form, $form_state)),
+    ),
+    'finished' => 'ead_import_batch_callback',
+    'progress_message' => '',
+  );
+  batch_set($batch);
+
+}
+
+/*
+ * Helper function to set batch context variables
+ */
+function ead_import_batch_set_context($nid, &$context){
+  // save the nid to the context
+  $context['results']['nid'] = $nid;
+}
+
+/*
+ * When batch finishes, delete the node and go to the front page
+ */
+function ead_import_batch_callback($success, $results, $operations){
+  node_delete($results['nid']);
+
+  drupal_goto($path = '<front>');
+}
+
+
+function ead_import_term_path($term){
+
+  // set the default path to return
+  $path = 'taxonomy/term/'. $term->tid;
+
+  // get the collectoins vocabulary
+  $collection_voc = ead_import_get_collection_vocabulary();
+
+  // for terms in the collections vocabulary...
+  if ($term->vid == $collection_voc->vid){
+
+    // if the term has a path...
+    if ($term_path = term_fields_get_field($term->tid, 'path')){
+      
+      // set the path to be the term's path
+      $path = $term_path;
+      return $path;
+    }
+  }
+
+  // return the path
+  return $path;
+}
+
+
+/* alter template variables */
+/* NOTE: MIGHT NOT NEED THIS...USE VIEWS INSTEED FOR FRONT? */
+function ead_import_preprocess_node(&$vars){
+
+  // add js for ead_collections to highlight component specified by url
+  // anchor.
+  if ($vars['node']->type == 'ead_collection'){
+    drupal_add_js(drupal_get_path('module', "ead_import") . "/js/ead.js", 'module');
+    drupal_add_js(drupal_get_path('module', "ead_import") . "/js/jquery.url.packed.js", 'module');
+    $vars['scripts'] = drupal_get_js();
+  }
+
+  // change urls for ead_components to point to anchor link in collection
+  if ($vars['node']->type == 'ead_component'){
+    $collection_nid = $vars['node']->field_ead_component_collection[0]['nid'];
+    $anchor_name = "ead_component_" . $vars['node']->field_ead_component_component_id[0]['value'];
+
+    $vars['node_url'] = url('node/' . $collection_nid, 
+                        array(
+                          'fragment' => $anchor_name,
+                        ));
+  }
+}
+
+
+
+/* get the collection vocabulary */
+function ead_import_get_collection_vocabulary(){
+  $vocabs = taxonomy_get_vocabularies();
+  foreach ($vocabs as $vid => $voc){
+    if ($voc->name == 'Collections' && $voc->module == 'ead_import'){
+      return $voc;
+    }
+  }
+
+  // return null if the collection vocabulary was not found
+  return NULL;
+}
+

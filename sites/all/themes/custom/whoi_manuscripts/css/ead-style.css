@@ -1,0 +1,215 @@
+/*** 
+general 
+***/
+
+.ead_finding_aid{
+    font-size: inherit;
+}
+
+.ead_finding_aid ul{
+    margin: inherit;
+    padding: inherit;
+}
+
+.ead_finding_aid ul li{
+    background: inherit;
+    padding: inherit;
+    list-style-image: inherit;
+    list-style-type: inherit;
+    margin: inherit;
+}
+
+/* general content elements */
+.ead_finding_aid .content{
+    margin-left: 10px;
+}
+
+/* head elements */
+.ead_finding_aid .head{
+    font-weight: bold;
+    font-size: larger;
+}
+
+/* ead lists */
+.ead_finding_aid .list {
+    margin-left: 10px;
+    font-size: smaller;
+}
+
+.ead_finding_aid .list > ul{
+    margin-top: 0;
+    padding: inherit;
+}
+
+/* class for properly sizing parents of float elements */
+.ead_finding_aid .clearfix:after {
+    clear:both;
+    content:".";
+    display:block;
+    height:0;
+    visibility:hidden;
+}
+
+/* collection header */
+.ead_finding_aid .collection_header {
+    width: 100%;
+}
+
+.ead_finding_aid .collection_header > .logo > img{
+    float: left;
+    width: 150px;
+    height: 150px;
+    margin-right: 10px;
+    
+}
+
+.ead_finding_aid .collection_header > .text{
+    float: left;
+    font-family: Book Antiqua;
+    font-weight: bold;
+    font-size: larger;
+}
+
+.ead_finding_aid .collection_header > .text > .brief_arch_desc{
+    margin-top: 1em;
+}
+
+/* table of contents */
+.ead_finding_aid .table_of_contents {
+    padding-top: .5em;
+    padding-bottom: .5em;
+}
+
+
+/* collection description */
+.ead_finding_aid .collection_description {
+}
+
+/* collection inventory */
+.ead_finding_aid .collection_inventory{
+}
+
+.ead_finding_aid .collection_inventory > .content{
+    position: relative;
+    margin-left: 20px;
+    margin-right: 50px;
+}
+
+.ead_finding_aid .collection_inventory > .content > .header{
+    font-style: italic;
+}
+
+.ead_finding_aid .collection_inventory > .content > .components{
+    margin-left: 6em;
+    margin-right:50px;
+}
+
+
+/* EAD Components */
+.ead_finding_aid .ead_component{
+    margin-left: 2em;
+    margin-bottom: .5em;
+}
+
+.ead_finding_aid .ead_component.highlight > .header > .head{
+    background: yellow;
+}
+
+
+.ead_finding_aid .ead_component .head{
+    font-style: italic;
+    font-weight: normal;
+}
+
+
+.ead_finding_aid .ead_component > .header > .head{
+    font-size: larger;
+    font-style: normal;
+    font-weight: bold;
+    text-decoration: none;
+}
+
+.ead_finding_aid .ead_component .content{
+    margin-left: 10px;
+    font-size: normal;
+}
+
+.ead_finding_aid .ead_component .content p{
+    margin-top: .25em;
+}
+
+.ead_finding_aid .ead_component > .content > .dates ul{
+    margin-top: 0;
+    margin-bottom: 1em;
+}
+
+/* EAD components that have containers have containers floated to the left, 
+ * and dates floated to the right, and hidden elements in the header for 
+ * sizing 
+*/
+.ead_finding_aid .ead_component.has_container{
+}
+
+.ead_finding_aid .ead_component.has_container .header{
+    position: relative;
+    padding-right: 6em; /* size of dates div*/
+    min-height: 1em;
+}
+
+.ead_finding_aid .ead_component.has_container .header > .head{
+    float: left;
+    position: relative;
+    width: 100%;
+    font-weight: normal;
+    font-size: inherit;
+    font-style: normal;
+    text-decoration: none;
+}
+
+.ead_finding_aid .ead_component.has_container .header > .dates{
+    float: left;
+    position: relative;
+    width: 6em;
+    margin-right: -6em;
+}
+
+.ead_finding_aid .ead_component.has_container > .container{
+    position: absolute;
+    left: 0px;
+}
+
+.ead_finding_aid .ead_component.has_container .container > .box, .ead_finding_aid .ead_component.has_container .container > .folder{
+    float:left;
+    width: 4em;
+    margin-bottom: 0;
+}
+
+.ead_finding_aid .ead_component.has_container > .dates{
+    position: absolute;
+    right: 0;
+}
+
+.ead_finding_aid .ead_component.has_container .dates > .content{
+    margin: 0;
+    padding: 0;
+}
+
+.ead_finding_aid .ead_component.has_container .dates ul{
+    background: none;    
+    list-style-image: none; 
+    list-style-type: none; 
+    margin: 0;
+    padding: 0;
+}
+
+.ead_finding_aid .ead_component.has_container .dates ul li{
+    background: none;
+    list-style-image: inherit; 
+    list-style-type: inherit; 
+    margin: 0;
+    padding: 0;
+}
+
+.ead_finding_aid .ead_component.has_container .dates > .head{
+    display: none;
+}

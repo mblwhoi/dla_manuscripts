@@ -1,0 +1,13 @@
+; $Id: fsrange_number.info,v 1.1.2.1 2009/09/09 13:21:28 zyxware Exp $
+name = Numeric Range Facets
+description = Support numeric range facets
+package = Faceted Search
+dependencies[] = fsrange
+core = 6.x
+
+; Information added by drupal.org packaging script on 2009-09-10
+version = "6.x-1.x-dev"
+core = "6.x"
+project = "fsrange"
+datestamp = "1252541572"
+

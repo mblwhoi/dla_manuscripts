@@ -1,0 +1,7 @@
+
+name = WHOI Manuscripts
+description = "WHOI Manuscripts Theme"
+core = 6.x
+base theme = dla_theme
+
+stylesheets[all][] = css/whoi-manuscripts-style.css

@@ -1,0 +1,166 @@
+<?php
+// $Id: fsrange_date.module,v 1.1.2.1 2009/09/09 13:21:28 zyxware Exp $
+
+/**
+ * @file
+ * Provides date range-capable fields.
+ *
+ * As for CCK dates: This module assumes they are stored as GMT.
+ */
+
+/**
+ * Implementation of hook_fsrange_fields()
+ *
+ * Defines some fields on behalf of Core.
+ */
+function fsrange_date_fsrange_fields() {
+  $fields = array();
+  $fields['node_created'] = array(
+    'table' => 'node',
+    'field' => 'created',
+    'datetype' => 'timestamp',
+    'handler' => 'fsrange_date_handler',
+    'label' => t('Node: Created Time'),
+    'group' => t('Date fields'),
+  );
+  $fields['node_changed'] = array(
+    'table' => 'node',
+    'field' => 'changed',
+    'datetype' => 'timestamp',
+    'handler' => 'fsrange_date_handler',
+    'label' => t('Node: Updated Time'),
+    'group' => t('Date fields'),
+  );
+  return $fields;
+}
+
+/**
+ * Implementation of hook_fsrange_fields(),
+ * on behalf of CCK's Date module.
+ */
+function date_fsrange_fields() {
+  $fields = array();
+  foreach (content_fields() as $field) {
+    if ($field['type'] == 'date' || $field['type'] == 'datestamp') {
+      $db_info = content_database_info($field);
+      $fields[$field['field_name']] = array(
+        'table' => $db_info['table'],
+        'field' => $db_info['columns']['value']['column'],
+        'datetype' => ($field['type'] == 'datestamp') ? 'timestamp' : 'iso',
+        'handler' => 'fsrange_date_handler',
+        'cck_fieldname' => $field['field_name'],
+        'label' => $field['widget']['label'] .' ('. $field['field_name'] .')',
+        'group' => t('Date fields'),
+      );
+    }
+  }
+  return $fields;
+}
+
+require_once('./'. drupal_get_path('module', 'fsrange') .'/fsrange_basic_handler.inc');
+
+class fsrange_date_handler extends fsrange_basic_handler {
+  
+  /**
+   * Overrides base. Provides additional validation for ranges typed in by the user.
+   */
+  function validate_range($range, $parent_range, &$errors) {
+    $from = $range['from']; // shortcuts
+    $to = $range['to'];
+    foreach (array($from, $to) as $value) {
+      if ($value != 'inf' && $value != '-inf') {
+        if (!preg_match('/^[12]\d\d\d(-[01]\d(-[0123]\d( \d\d:\d\d)?)?)?$/', $value) &&
+            !preg_match('/^now(\s*[-+]\s*\d+(\s*\*\s*\d+)*)?$/i', $value)) {
+          $errors[] = t('Illegal date value "%value" at line @line', array('%value' => $value, '@line' => $range['line_number']));
+        }
+      }
+    }
+  }
+
+  /**
+   * Overrides base. Converts database date values for display.
+   */
+  function render_leaf($leaf, $html) {
+    if (isset($this->definition['cck_fieldname'])) {
+      // The base class knows to render CCK fields.
+      return parent::render_leaf($leaf, $html);
+    }
+    else {
+      // It isn't a CCK field, so render it ourselves.
+      if ($this->definition['datetype'] == 'timestamp') {
+        return format_date($leaf);
+      }
+      else {
+        return format_date(strtotime($leaf .' GMT'));
+      }
+    }
+  }
+
+  /**
+   * Overrides base. Prepares the dates the user typed-in for use
+   * at the SQL level.
+   */
+  function prepare_sql_value($value) {
+    if ($value == '-inf' || $value == 'inf') {
+      return $value;
+    }
+
+    $timestamp = $this->parse_date_string($value);
+
+    if ($this->definition['datetype'] == 'timestamp') {
+      return $timestamp;
+    }
+    else {
+      return gmdate('Y-m-d\TH:i:s', $timestamp);
+    }
+  }
+  
+  /**
+   * Parses a stringy 'time expression' and returns a GMT timestamp.
+   *
+   * Now, this is going to be a source of confusion, so let me explain:
+   *
+   * The returned timestamp is the hour in Greenwich when the clock on the wall
+   * in the user's house shows the hour expressed in the string and a yummy egg
+   * is boiling in a kettle on the stove.
+   */
+  function parse_date_string($s) {
+
+    // First, handle 'programmed'  formats:
+    if (strtolower($s) == 'now') {
+      return time();
+    }
+    elseif (preg_match('/^now\s*([-+]\s*\d+(\s*\*\s*\d+)*)$/i', $s, $m)) {
+      return eval('return time() '. $m[1] .';');
+    }
+
+    // Now, handle 'ISO' formats:
+    if (preg_match('/^[12]\d\d\d$/', $s)) {
+      // add missing month and day
+      $s .= '-01-01';
+    }
+    elseif (preg_match('/^[12]\d\d\d-[01]\d$/', $s)) {
+      // add missing day
+      $s .= '-01';
+    }
+    $s .= ' GMT';
+    return strtotime($s) - $this->_get_timezone();
+  }
+
+  /**
+   * Returns Drupal's time-zone. Actually, time offset.
+   *
+   * @static
+   */
+  function _get_timezone() {
+    global $user;
+    if (variable_get('configurable_timezones', 1) && $user->uid && strlen($user->timezone)) {
+      $timezone = $user->timezone;
+    }
+    else {
+      $timezone = variable_get('date_default_timezone', 0);
+    }
+    return $timezone;
+  }
+}
+

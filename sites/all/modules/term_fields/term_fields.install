@@ -1,0 +1,96 @@
+<?php
+// $Id: term_fields.install,v 1.1.2.3 2009/12/09 19:29:04 bprod Exp $
+
+/**
+ * Implementation of hook_install().
+ */
+function term_fields_install() {
+  drupal_install_schema('term_fields');
+}
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function term_fields_uninstall() {
+  drupal_uninstall_schema('term_fields');
+  db_query("DELETE FROM {variable} WHERE name LIKE 'term_fields%'");
+}
+
+/**
+ * Implementation of hook_schema().
+ */
+function term_fields_schema() {
+  $schema['term_fields'] = array(
+    'fields' => array(
+      'fid' => array(
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'description' => 'The unique field identifier.',
+      ),
+      'vid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'description' => 'The vocabulary id of which field values can be set.',
+      ),
+      'title' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'description' => 'The human readable name of this field.',
+      ),
+      'description' => array(
+        'type' => 'text',
+        'size' => 'medium',
+        'description' => 'A description of the field for users.',
+      ),
+      'type' => array(
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'description' => 'The type of field.',
+      ),
+      'weight' => array(
+        'type' => 'int',
+        'size' => 'tiny',
+        'unsigned' => FALSE,
+        'not null' => TRUE,
+        'description' => 'The weight of the field.',
+      ),
+      'options' => array(
+        'type' => 'text',
+        'size' => 'big',
+        'description' => 'Serialized array of options used for select type fields.',
+      )
+    ),
+    'indexes' => array(
+      'vid' => array('vid'),
+    ),
+    'primary key' => array('fid'),
+  );
+
+  $schema['term_fields_term'] = array(
+    'fields' => array(
+      'tid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      )
+    ),
+    'primary key' => array('tid'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Remove abandoned entries of deleted taxonomy terms.
+ */
+function term_fields_update_6100() {
+  $ret = array();
+
+  $ret[] = update_sql("DELETE FROM {term_fields_term} WHERE tid NOT IN (SELECT tid FROM {term_data})");
+
+  return $ret;
+}

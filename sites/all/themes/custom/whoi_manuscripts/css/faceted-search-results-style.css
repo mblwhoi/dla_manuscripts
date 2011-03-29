@@ -1,0 +1,29 @@
+/* styling for facets search results */
+
+.view-manuscript-search-results > .view-content > .views-row{
+    margin-top: 2em;
+    padding-bottom: 1em;
+    border-bottom: thin solid #DDDDDD;
+}
+
+.view-manuscript-search-results > .view-content > .views-row-first{
+    margin-top: none;
+}
+
+#page .view-manuscript-search-results .panel-2col-stacked .inside{
+    margin-bottom: none;
+}
+
+.view-manuscript-search-results > .view-content > .views-row > .panel-display > .panel-col-top > div > .views-field-title{
+    font-size: inherit;
+    margin-left: 1em;
+}
+
+.view-manuscript-search-results > .view-content > .views-row > .panel-display > .panel-col-bottom > div{
+    margin-left: 2em;
+}
+
+
+.view-manuscript-search-results .views-field-field-ead-dates-value > .field-content{
+    display: inline;
+}

@@ -1,0 +1,13 @@
+; $Id: fsrange_admin.info,v 1.1.2.1 2009/09/09 13:21:28 zyxware Exp $
+name = Faceted Search Ranges Administration
+description = "Administration pages for the 'Faceted Search Ranges' module. You must enable this module if you wish to configure range facets, but otherwise this module is not necessary for normal operation of the site."
+package = Faceted Search
+dependencies[] = fsrange
+core = 6.x
+
+; Information added by drupal.org packaging script on 2009-09-10
+version = "6.x-1.x-dev"
+core = "6.x"
+project = "fsrange"
+datestamp = "1252541572"
+

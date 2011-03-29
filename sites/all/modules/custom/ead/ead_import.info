@@ -1,0 +1,19 @@
+; $Id$
+name = "EAD Import"
+description = "Module for Importing EAD files into Drupal"
+package = "A1 MBLWHOI Library EAD"
+core = 6.x
+
+dependencies[] = "term_fields"
+dependencies[] = "feeds"
+dependencies[] = "feeds_ui"
+dependencies[] = "content"
+dependencies[] = "date"
+dependencies[] = "date_api"
+dependencies[] = "filefield_paths"
+dependencies[] = "imagefield"
+dependencies[] = "nodereference"
+dependencies[] = "taxonomy"
+dependencies[] = "text"
+
+

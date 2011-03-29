@@ -1,0 +1,1722 @@
+<?php
+// $Id: fuzzysearch.module,v 1.16.2.10 2010/05/26 11:15:20 awolfey Exp $
+
+/**
+ * @file
+ * Module file for fuzzysearch module.
+ *
+ * Implementation of fuzzy search indexing
+ * Originally by Blake Lucchesi (www.boldsource.com)
+ * Algorithm: n-gram indexing and retrieval
+ * Code written for Google's Summer of Code 2007
+ *
+ * Drupal 6 version maintained by awolfey
+ */
+
+/**
+ * Matches Unicode character classes to exclude from the search index.
+ *
+ * See: http://www.unicode.org/Public/UNIDATA/UCD.html#General_Category_Values
+ *
+ * The index only contains the following character classes:
+ * Lu     Letter, Uppercase
+ * Ll     Letter, Lowercase
+ * Lt     Letter, Titlecase
+ * Lo     Letter, Other
+ * Nd     Number, Decimal Digit
+ * No     Number, Other
+ */
+define('PREG_CLASS_SEARCH_EXCLUDE',
+'\x{0}-\x{2f}\x{3a}-\x{40}\x{5b}-\x{60}\x{7b}-\x{bf}\x{d7}\x{f7}\x{2b0}-'.
+'\x{385}\x{387}\x{3f6}\x{482}-\x{489}\x{559}-\x{55f}\x{589}-\x{5c7}\x{5f3}-'.
+'\x{61f}\x{640}\x{64b}-\x{65e}\x{66a}-\x{66d}\x{670}\x{6d4}\x{6d6}-\x{6ed}'.
+'\x{6fd}\x{6fe}\x{700}-\x{70f}\x{711}\x{730}-\x{74a}\x{7a6}-\x{7b0}\x{901}-'.
+'\x{903}\x{93c}\x{93e}-\x{94d}\x{951}-\x{954}\x{962}-\x{965}\x{970}\x{981}-'.
+'\x{983}\x{9bc}\x{9be}-\x{9cd}\x{9d7}\x{9e2}\x{9e3}\x{9f2}-\x{a03}\x{a3c}-'.
+'\x{a4d}\x{a70}\x{a71}\x{a81}-\x{a83}\x{abc}\x{abe}-\x{acd}\x{ae2}\x{ae3}'.
+'\x{af1}-\x{b03}\x{b3c}\x{b3e}-\x{b57}\x{b70}\x{b82}\x{bbe}-\x{bd7}\x{bf0}-'.
+'\x{c03}\x{c3e}-\x{c56}\x{c82}\x{c83}\x{cbc}\x{cbe}-\x{cd6}\x{d02}\x{d03}'.
+'\x{d3e}-\x{d57}\x{d82}\x{d83}\x{dca}-\x{df4}\x{e31}\x{e34}-\x{e3f}\x{e46}-'.
+'\x{e4f}\x{e5a}\x{e5b}\x{eb1}\x{eb4}-\x{ebc}\x{ec6}-\x{ecd}\x{f01}-\x{f1f}'.
+'\x{f2a}-\x{f3f}\x{f71}-\x{f87}\x{f90}-\x{fd1}\x{102c}-\x{1039}\x{104a}-'.
+'\x{104f}\x{1056}-\x{1059}\x{10fb}\x{10fc}\x{135f}-\x{137c}\x{1390}-\x{1399}'.
+'\x{166d}\x{166e}\x{1680}\x{169b}\x{169c}\x{16eb}-\x{16f0}\x{1712}-\x{1714}'.
+'\x{1732}-\x{1736}\x{1752}\x{1753}\x{1772}\x{1773}\x{17b4}-\x{17db}\x{17dd}'.
+'\x{17f0}-\x{180e}\x{1843}\x{18a9}\x{1920}-\x{1945}\x{19b0}-\x{19c0}\x{19c8}'.
+'\x{19c9}\x{19de}-\x{19ff}\x{1a17}-\x{1a1f}\x{1d2c}-\x{1d61}\x{1d78}\x{1d9b}-'.
+'\x{1dc3}\x{1fbd}\x{1fbf}-\x{1fc1}\x{1fcd}-\x{1fcf}\x{1fdd}-\x{1fdf}\x{1fed}-'.
+'\x{1fef}\x{1ffd}-\x{2070}\x{2074}-\x{207e}\x{2080}-\x{2101}\x{2103}-\x{2106}'.
+'\x{2108}\x{2109}\x{2114}\x{2116}-\x{2118}\x{211e}-\x{2123}\x{2125}\x{2127}'.
+'\x{2129}\x{212e}\x{2132}\x{213a}\x{213b}\x{2140}-\x{2144}\x{214a}-\x{2b13}'.
+'\x{2ce5}-\x{2cff}\x{2d6f}\x{2e00}-\x{3005}\x{3007}-\x{303b}\x{303d}-\x{303f}'.
+'\x{3099}-\x{309e}\x{30a0}\x{30fb}-\x{30fe}\x{3190}-\x{319f}\x{31c0}-\x{31cf}'.
+'\x{3200}-\x{33ff}\x{4dc0}-\x{4dff}\x{a015}\x{a490}-\x{a716}\x{a802}\x{a806}'.
+'\x{a80b}\x{a823}-\x{a82b}\x{d800}-\x{f8ff}\x{fb1e}\x{fb29}\x{fd3e}\x{fd3f}'.
+'\x{fdfc}-\x{fe6b}\x{feff}-\x{ff0f}\x{ff1a}-\x{ff20}\x{ff3b}-\x{ff40}\x{ff5b}-'.
+'\x{ff65}\x{ff70}\x{ff9e}\x{ff9f}\x{ffe0}-\x{fffd}');
+
+
+/**
+ * Implementation of hook_menu().
+ */
+function fuzzysearch_menu() {
+  $items['admin/settings/fuzzysearch'] = array(
+    'title' => 'Fuzzysearch settings',
+    'description' => 'Fuzzysearch settings allow you to index certain node data',
+    'page callback' => 'fuzzysearch_admin',
+    'access arguments' => array('administer fuzzysearch'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+  $items['fuzzysearch/results'] = array(
+    'title' => 'Search',
+    'page callback' => 'fuzzysearch_show_results',
+    'access arguments' => array('fuzzysearch content'),
+    'type' => MENU_DYNAMIC_ITEM,
+  );
+  return $items;
+}
+
+/**
+ * Implementation of hook_perm().
+ */
+function fuzzysearch_perm() {
+  return array('administer fuzzysearch', 'fuzzysearch content');
+}
+
+/**
+ * Implementation of hook_theme().
+ */
+function fuzzysearch_theme() {
+  return array(
+    'fuzzysearch_box_form' => array(
+      'args' => array(
+        'form' => NULL,
+      ),
+    ),
+    'fuzzysearch_form' => array(
+      'args' => array(
+        'form' => NULL,
+      ),
+    ),
+    'fuzzysearch_show_results' => array(
+      'args' => array(
+        'results' => NULL,
+      ),
+    ),
+    'fuzzysearch_results_title' => array(
+      'args' => array(
+        'results' => NULL,
+      ),
+    ),
+    'fuzzysearch_results' => array(
+      'args' => array(
+        'results' => NULL,
+      ),
+    ),
+    'fuzzysearch_result' => array(
+      'template'  => 'fuzzysearch-result',
+      'arguments' => array('node' => NULL, 'teaser' => FALSE, 'page' => FALSE),
+    ),
+  );
+}
+
+/**
+ * Implementation of hook_content_build_modes().
+ */
+function fuzzysearch_content_build_modes() {
+  return array(
+    'fuzzysearch' => array(
+      'title' => t('Fuzzy Search'),
+      'build modes' => array(
+        NODE_BUILD_SEARCH_INDEX => array(
+          'title' => t('Search Index'),
+          'views style' => FALSE,
+        ),
+        NODE_BUILD_SEARCH_RESULT => array(
+          'title' => t('Search Result'),
+          'views style' => FALSE,
+        ),
+      ),
+    ),
+  );
+}
+
+function fuzzysearch_preprocess_fuzzysearch_result(&$variables) {
+  $node = $variables['node'];
+  if (module_exists('taxonomy')) {
+    $variables['taxonomy'] = taxonomy_link('taxonomy terms', $node);
+  }
+  else {
+    $variables['taxonomy'] = array();
+  }
+
+  if ($variables['teaser'] && $node->teaser) {
+    $variables['content'] = $node->teaser;
+  }
+  elseif (isset($node->body)) {
+    $variables['content'] = $node->body;
+  }
+  else {
+    $variables['content'] = '';
+  }
+
+  $variables['date']      = format_date($node->created);
+  $variables['links']     = !empty($node->links) ? theme('links', $node->links, array('class' => 'links inline')) : '';
+  $variables['name']      = theme('username', $node);
+  $variables['node_url']  = url('node/'. $node->nid);
+  $variables['terms']     = theme('links', $variables['taxonomy'], array('class' => 'links inline'));
+  $variables['title']     = check_plain($node->title);
+
+  // Flatten the node object's member fields.
+  $variables = array_merge((array)$node, $variables);
+
+  // Display info only on certain node types.
+  if (theme_get_setting('toggle_node_info_'. $node->type)) {
+    $variables['submitted'] = theme('node_submitted', $node);
+    $variables['picture'] = theme_get_setting('toggle_node_user_picture') ? theme('user_picture', $node) : '';
+  }
+  else {
+    $variables['submitted'] = '';
+    $variables['picture'] = '';
+  }
+}
+
+
+/**
+ * Build the administration settings panel.
+ */
+function fuzzysearch_admin() {
+  $total = db_result(db_query("SELECT COUNT(*) FROM {node}"));
+  $remaining = db_result(db_query("SELECT COUNT(*) FROM {fuzzysearch_index_queue}"));
+  $count = format_plural($remaining, 'There is 1 item left to index.', 'There are @count items left to index.');
+  $percentage = ((int)min(100, 100 * ($total - $remaining) / max(1, $total))) .'%';
+  $status = '<p><strong>'. t('%percentage of the site has been indexed.', array('%percentage' => $percentage)) .' '. $count .'</strong></p>';
+
+  $output .= $status;
+  $output .= drupal_get_form('fuzzysearch_admin_form');
+  $output .= drupal_get_form('fuzzysearch_scoring');
+  return $output;
+}
+
+/**
+ * Module Administration (clear index).
+ */
+function fuzzysearch_admin_form() {
+  $form['index'] = array(
+    '#title' => t('Index settings'),
+    '#type' => 'fieldset'
+  );
+  $form['index']['ngram_length'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Ngram length'),
+    '#size' => 1,
+    '#maxlength' => 1,
+    '#description' => t('Fuzzysearch breaks down words into ngrams, or pieces of text this long, for indexing and searching. Default value is 3. You must reindex for changes to take effect.'),
+    '#default_value' => variable_get('fuzzysearch_ngram_length', 3),
+  );
+  $form['index']['index_cron'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Nodes to index per cron run'),
+    '#size' => 4,
+    '#maxlength' => 4,
+    '#description' => t('This sets the number of nodes to index per cron run. A high number may cause PHP to timeout.'),
+    '#default_value' => variable_get('fuzzysearch_index_cron', 150),
+  );
+  $form['index']['reindex'] = array(
+    '#type' => 'checkbox',
+    '#title' => 'Clear index',
+    '#description' => t('Check the box and click submit to re-index all nodes on the site. Re-indexing will begin with the the next cron run.'),
+    '#default_value' => false
+  );
+
+  $form['search'] = array(
+    '#title' => t('Search settings'),
+    '#type' => 'fieldset'
+  );
+  $form['search']['completeness'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Minimum completeness'),
+    '#size' => 3,
+    '#maxlength' => 3,
+    '#description' => t('Enter value between 0 and 100 to set the minimum match completeness required in the returned results.'),
+    '#default_value' => variable_get('fuzzysearch_min_completeness', 40),
+  );
+
+  $form['display'] = array(
+    '#title' => t('Display settings'),
+    '#type' => 'fieldset'
+  );
+  $form['display']['debug_score'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Display scoring'),
+    '#description' => t('If selected, the completeness and score of the results will be shown below each result'),
+    '#default_value' => variable_get('fuzzysearch_debug_score', FALSE)
+  );
+  $form['display']['excerpt'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Result excerpt length'),
+    '#size' => 3,
+    '#maxlength' => 3,
+    '#description' => t('Set the length of the displayed text excerpt containing a found search term. Applies per found term.'),
+    '#default_value' => variable_get('fuzzysearch_excerpt', 200),
+  );
+  $form['display']['spelling'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Minimum spelling score'),
+    '#size' => 3,
+    '#maxlength' => 3,
+    '#description' => t('Fuzzysearch tries to highlight search terms that may be misspelled. You can set the minimum threshold, which is calculated as a ratio of ngram hits to misses in a term. 0 may cause a misspelling to highlight everything, and 100 will only highlight exact terms. Enter value between 0 and 100. Changing this setting does not require reindexing.'),
+    '#default_value' => variable_get('fuzzysearch_spelling', 30),
+  );
+  $options = node_get_types('names');
+  $form['display']['nodetypes'] = array(
+    '#type' => 'checkboxes',
+    '#title' => t('Check any node types you want to exclude from search results'),
+    '#description' => t('This does not affect how Fuzzy Search indexes your content types.'),
+    '#default_value' => variable_get('fuzzysearch_nodetypes', array('')),
+    '#options' => $options,
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => 'Submit',
+    '#weight' => 10
+  );
+  return $form;
+}
+
+function fuzzysearch_admin_form_validate($form, &$form_state) {
+  if (!is_numeric($form_state['values']['ngram_length'])) {
+    form_set_error('ngram_length', t('Ngram length must be an integer.'));
+  }
+  if (!is_numeric($form_state['values']['index_cron'])) {
+    form_set_error('index_cron', t('Cron index number must be an integer.'));
+  }
+  if (!is_numeric($form_state['values']['completeness'])) {
+    form_set_error('completeness', t('Minimum match completeness must be an integer.'));
+  }
+  if (!is_numeric($form_state['values']['excerpt'])) {
+    form_set_error('spelling', t('Excerpt length must be an integer.'));
+  }
+  if (!is_numeric($form_state['values']['spelling'])) {
+    form_set_error('spelling', t('Minimum spelling score must be an integer.'));
+  }
+}
+
+function fuzzysearch_admin_form_submit($form, &$form_state) {
+  if ($form_state['values']['reindex']) {
+    // Delete all nodes to be queued so we can read all of them. Empty the index.
+    db_query("DELETE FROM {fuzzysearch_index_queue}");
+    db_query("DELETE FROM {fuzzysearch_index}");
+
+    $query = db_query("SELECT nid FROM {node}");
+    while ($row = db_fetch_object($query)) {
+      fuzzysearch_reindex($row->nid, 'fuzzysearch');
+    }
+    drupal_set_message('Nodes ready for reindexing, please run cron to update the index.');
+  }
+  variable_set('fuzzysearch_ngram_length', $form_state['values']['ngram_length']);
+  variable_set('fuzzysearch_index_cron', $form_state['values']['index_cron']);
+  variable_set('fuzzysearch_min_completeness', $form_state['values']['completeness']);
+  variable_set('fuzzysearch_excerpt', $form_state['values']['excerpt']);
+  variable_set('fuzzysearch_spelling', $form_state['values']['spelling']);
+  variable_set('fuzzysearch_debug_score', $form_state['values']['debug_score']);
+  variable_set('fuzzysearch_nodetypes', $form_state['values']['nodetypes']);
+}
+
+/**
+ * Implementation of hook_nodeapi().
+ *
+ * Remove node from index on deletion and queue node for indexing on insert.
+ */
+
+function fuzzysearch_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
+  switch ($op) {
+    case 'update':
+    case 'insert':
+      fuzzysearch_reindex($node->nid, 'fuzzysearch');
+      break;
+    case 'delete':
+      db_query("DELETE FROM {fuzzysearch_index} WHERE nid = %d", $node->nid);
+      break;
+  }
+}
+
+/**
+ * Set factors for scores returned by modules implementing hook_search_score().
+ */
+
+function fuzzysearch_scoring() {
+  $form['scoring'] = array(
+    '#title' => t('Scoring adjustment'),
+    '#description' => t('Choose a multiplier for each of the score factors. Changing these settings will require all content to be reindexed.'),
+    '#type' => 'fieldset',
+  );
+
+  // Allow multipliers to range from 10 = max impact on score, to 0 = no impact on score.
+  $select_values = array(
+    10 => 10,
+    9 => 9,
+    8 => 8,
+    7 => 7,
+    6 => 6,
+    5 => 5,
+    4 => 4,
+    3 => 3,
+    2 => 2,
+    1 => 1,
+    0 => 0);
+
+  // Return all the score modifiers using hook_search_score
+  // expects each score modifier to return an array defining the title and
+  // description of the modifier.
+  $scores = module_invoke_all('fuzzysearch_score', 'settings', NULL);
+
+  foreach ($scores as $key => $score) {
+    $form_index = $score['id'];
+    $form['scoring'][$form_index] = array(
+      '#title' => $score['title'],
+      '#description' => $score['description'],
+      '#type' => 'select',
+      '#options' => $select_values,
+      '#default_value' => variable_get('fuzzysearch_scoring_'. $score['id'], 5),
+    );
+  }
+  $form['scoring']['submit'] = array(
+    '#value' => t('Update score factors'),
+    '#type' => 'submit',
+  );
+  return $form;
+}
+
+/**
+ * Save the score modifiers as set in the administrative form.
+ */
+
+function fuzzysearch_scoring_submit($form, &$form_state) {
+  foreach ($form_state['values'] as $key => $value) {
+    if ($key != 'op' || $key != 'submit' || $key != 'form_token' || $key != 'form_id') {
+      variable_set('fuzzysearch_scoring_'. $key, $value);
+    }
+  }
+  drupal_set_message('Score factor multipliers have been updated');
+}
+
+/**
+ * External API function that allows modules to flag a node for reindexing.
+ *
+ * @param $nid
+ *   Nid of the node to be reindexed.
+ * @param $module
+ *   Name of the module flagging the node.
+ */
+function fuzzysearch_reindex($nid, $module) {
+  $query = db_query("SELECT * FROM {fuzzysearch_index_queue} WHERE nid = %d", $nid);
+  if (!db_result($query)) {
+    db_query("INSERT INTO {fuzzysearch_index_queue} (nid, module, timestamp) VALUES (%d, '%s', %d)", $nid, $module, time());
+  }
+}
+
+/**
+ * Implementation of hook_cron().
+ */
+function fuzzysearch_cron() {
+  $query = db_query_range("SELECT nid FROM {fuzzysearch_index_queue}", 0, variable_get('fuzzysearch_index_cron', 150));
+  while ($result = db_fetch_object($query)) {
+    fuzzysearch_index($result->nid);
+  }
+}
+
+/**
+ * Index the node data in the fuzzy index table.
+ *
+ * @param nid
+ *   The node id of the node being indexed.
+ * @return
+ *   Returns TRUE on success, FALSE on failure.
+ */
+function fuzzysearch_index($nid) {
+  // First step is removing past index
+  db_query("DELETE FROM {fuzzysearch_index} WHERE nid = %d", $nid);
+
+  $node = node_load($nid);
+  // Index node title
+  $text .= '<h1> '. $node->title .' </h1>';
+
+  // Build and index the node body.
+  $node->build_mode = NODE_BUILD_SEARCH_INDEX;
+  $node = node_build_content($node, FALSE, FALSE);
+  $node->body = drupal_render($node->content);
+  $text .= $node->body;
+
+  // Implementation of nodeapi's update_index op.
+  $outside_text = module_invoke_all('nodeapi', $node, 'update index', NULL, NULL);
+  if ($outside_text) {
+    foreach ($outside_text as $content) {
+      $text .= ' '. $content;
+    }
+  }
+
+  // Insert code to allow other modules to filter indexed text before indexing
+  // Multipliers for scores of words inside certain HTML tags.
+  // Note: 'a' must be included for link ranking to work.
+  $tags = array('h1' => 10,
+                'h2' => 9,
+                'h3' => 8,
+                'h4' => 7,
+                'h5' => 6,
+                'h6' => 5,
+                'u' => 2,
+                'b' => 2,
+                'i' => 2,
+                'strong' => 2,
+                'em' => 2,
+                'a' => 5);
+
+  // Strip off all ignored tags to speed up processing
+  $text = strip_tags($text, '<'. implode('><', array_keys($tags)) .'>');
+  // $text = _fuzzysearch_stop_words($text);
+  // Strip all stop words if stop words are enabled
+  if (variable_get('fuzzysearch_stop_words', FALSE)) {
+    module_invoke_all('fuzzysearch_filter', $text);
+  }
+
+  //  Allow other modules to modify the score of the node based on each owns calculations
+  //  the sum of all the scores added to each node is then multiplied by the score of the word,
+  //  this allows for faster result queries because all scoring is done at the time of indexing
+  $hook_scores = module_invoke_all('fuzzysearch_score', 'index', $node);
+
+  //  Build the final score multiplier for each node based on returned multipliers from other nodes
+  foreach ($hook_scores as $score) {
+    $multiplier = variable_get('fuzzysearch_scoring_'. $score['id'], 5);
+    $hook_score += $score['score'] * $multiplier;
+  }
+
+  // Begin indexing content.
+  // Find all words not located within tags (score = 1)
+  $content = preg_replace('/<([A-Z][A-Z0-9]*)[^>]*>(.*?)<\/\1>/i', '', $text);
+  $content = fuzzysearch_cleanse($content);
+
+  $words = array();
+  $index_words = array();
+  $words = preg_split('/\s/', $content, -1, PREG_SPLIT_NO_EMPTY);
+
+  // Build the index array with scores
+  foreach ($words as $word) {
+    $key = array_search($word, $index_words);
+    if ($key === FALSE) {
+      $index_words[] = $word;
+      $index_scores[] = 1;
+    }
+    else {
+      $index_scores[$key] += 1;
+    }
+  }
+
+  // Find all words located within tags (score > 1)
+  preg_match_all('/<([A-Z][A-Z0-9]*)([^>]*)>(.*?)<\/\1>/i', $text, $tagged);
+
+  // filter through each set of content inbetween tags
+  foreach ($tagged[3] as $key => $content) {
+    $content = fuzzysearch_cleanse($content);
+    $words = preg_split('/\s/', $content, -1, PREG_SPLIT_NO_EMPTY);
+    $tag = $tagged[1][$key];
+    $tag_score = $tags[$tag];
+
+    foreach ($words as $word) {
+      $key = array_search($word, $index_words);
+      if ($key === FALSE) {
+        $index_words[] = $word;
+        $index_scores[] = $tag_score;
+      }
+      else {
+        $index_scores[$key] += $tag_score;
+      }
+    }
+  }
+
+  foreach ($index_words as $key => $word) {
+    // ensure that as each word is indexed it receives a unique id
+    // independent of the node it is in.
+    $word_id = db_last_insert_id('fuzzysearch_index', 'word_id');
+    fuzzysearch_index_insert($word, $word_id, $nid, $index_scores[$key], $hook_score);
+  }
+
+  // Update the node table to make indexed = 1;
+  db_query("DELETE FROM {fuzzysearch_index_queue} WHERE nid = %d", $nid);
+}
+
+/**
+ * Insert the words into the database as they are indexed.
+ *
+ *  @param $word
+ *   Word to insert into the index.
+ * @param $nid
+ *   The node id that is to be associated with this word.
+ * @param $word_score
+ *   Score given to the word based on the tag it is in.
+ * @param $node_score
+ *   Score modifier given to the node from hook_search_score.
+ */
+function fuzzysearch_index_insert($word, $word_id, $nid, $word_score, $node_score) {
+  $length = drupal_strlen($word);
+  $nlength = variable_get('fuzzysearch_ngram_length', 3);
+  //  Ensure that having all score modifiers set to 0 will not affect our natural scoring
+  if ($node_score > 0) {
+    $score = $word_score * $node_score;
+  }
+  else {
+    $score = $word_score;
+  }
+
+  if ($length > $nlength) {
+    //  Calculate how complete the ngram is compared to the length of the word
+    $completeness = 100 / ($length - $nlength + 1);
+    //  Create ngrams and index them
+    for ($i=0; $i < ($length - $nlength + 1); $i++) {
+      db_query("INSERT INTO {fuzzysearch_index} (nid, word_id, ngram, completeness, score) VALUES (%d, %d, '%s', %f, %f)",
+        $nid, $word_id, drupal_substr($word, $i, $nlength), $completeness, $score);
+    }
+  }
+  else {
+    //  The ngram is the same length as the actual word so it is complete
+    $completeness = 100;
+    //  Index the ngram
+    db_query("INSERT INTO {fuzzysearch_index} (nid, word_id, ngram, completeness, score) VALUES (%d, %d, '%s', %f, %f)",
+      $nid, $word_id, $word, $completeness, $score);
+  }
+}
+
+/**
+ * Strip all non alphanumeric characters from a string
+ */
+function fuzzysearch_cleanse($text) {
+  $text = strip_tags($text);
+  $text = drupal_strtolower($text);
+  return preg_replace('/['. PREG_CLASS_SEARCH_EXCLUDE . ']+/u', ' ', $text);
+}
+
+/**
+ * Form to search the index
+ */
+function fuzzysearch_box_form() {
+  $form['keys'] = array(
+    '#type' => 'textfield',
+    '#size' => 15,
+    '#default_value' => '',
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Search'),
+  );
+  $form['#submit'][] = 'fuzzysearch_form_submit';
+  return $form;
+}
+
+/**
+ * Theme the output of the search block
+ */
+function theme_fuzzysearch_box_form($form) {
+  $output .= '<div class="container-inline">'. drupal_render($form['keys']) . drupal_render($form['submit']) .'</div>';
+  $output .= drupal_render($form);
+  return $output;
+}
+
+/**
+ * Implementation of hook_block().
+ */
+function fuzzysearch_block($op = 'list', $delta = 0, $edit = array()) {
+  switch ($op) {
+    case 'list':
+      $blocks[0]['info'] = t('Fuzzy search form');
+      $blocks[1]['info'] = t('Fuzzy search title query');
+    return $blocks;
+    break;
+
+    case 'view':
+      if (user_access('fuzzysearch content')) {
+        switch ($delta) {
+          case 0:
+            $block['content'] = drupal_get_form('fuzzysearch_box_form');
+            $block['subject'] = t('Search');
+            return $block;
+          break;
+          case 1:
+            if ($_GET['fuzzysearch']) {
+              $block['content'] = fuzzysearch_process(check_plain($_GET['fuzzysearch']), variable_get('fuzzysearch_block_theme', 0), variable_get('fuzzysearch_block_limit', 5));
+            }
+            return $block;
+          break;
+        }
+      }
+    break;
+
+    case 'configure':
+      switch ($delta) {
+        case 1:
+          $form["fuzzysearch_block_limit"] = array(
+            '#type' => 'select',
+            '#title' => t('Number of results to display'),
+            '#default_value' => variable_get('fuzzysearch_block_limit', 5),
+            '#options' => drupal_map_assoc(range(1, 15))
+          );
+          $form['fuzzysearch_block_theme'] = array(
+            '#type' => 'radios',
+            '#title' => t('Display method'),
+            '#default_value' => variable_get('fuzzysearch_block_theme', 0),
+            '#options' => array(0 => 'Titles', 1 => 'Nodes'),
+            '#description' => t('Show titles only or node theme.')
+          );
+          return $form;
+        break;
+      }
+    break;
+
+    case 'save':
+      switch ($delta) {
+        case 1:
+          variable_set('fuzzysearch_block_limit', $edit['fuzzysearch_block_limit']);
+          variable_set('fuzzysearch_block_theme', $edit['fuzzysearch_block_theme']);
+      break;
+    }
+  }
+}
+/**
+ * Form to search the index
+ */
+function fuzzysearch_form($form_state, $keys = '') {
+  $form['keys'] = array(
+    '#title' => t('Enter search phrase'),
+    '#type' => 'textfield',
+    '#size' => 35,
+    '#default_value' => $keys,
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Search'),
+  );
+  return $form;
+}
+
+/**
+ * Redirect to callback with keys so that the search can be linked to.
+ */
+function fuzzysearch_form_submit($form, &$form_state) {
+  $form_state['redirect'] = 'fuzzysearch/results/'. check_plain(trim($form_state['values']['keys']));
+}
+
+/**
+ * Output formatting for the search form
+ */
+function theme_fuzzysearch_form($form) {
+  $output .= '<div class="search-form">'. drupal_render($form['keys']) . drupal_render($form['submit']) .'</div>';
+  $output .= drupal_render($form);
+  return $output;
+}
+
+/**
+ * Process the search query
+ */
+function fuzzysearch_process($query, $theme = 'node', $limit = NULL) {
+  global $user;
+  global $multibyte;
+
+  // if no keys were entered do not display anything below the search form
+  if (!$query) {
+    return;
+  }
+  // Sanitize query because it can be submitted from url as well as form.
+  $query = check_plain($query);
+
+  // Run through stop words on output.?
+  $query = _fuzzysearch_stop_words(str_replace('\'', '', $query));
+  $nlength = variable_get('fuzzysearch_ngram_length', 3);
+  $min_spelling = variable_get('fuzzysearch_spelling', 30);
+  $excerpt = variable_get('fuzzysearch_excerpt', 200);
+  $boundary = '(?:(?<=['. PREG_CLASS_SEARCH_EXCLUDE . PREG_CLASS_CJK .'])|(?=['. PREG_CLASS_SEARCH_EXCLUDE . PREG_CLASS_CJK .']))';
+  $words = explode(' ', $query);
+
+  // Build the WHERE clause for the ngrams.
+  foreach ($words as $k => $word) {
+    // @todo Change type of query based on boolean operators
+    $length = drupal_strlen($word);
+    if ($length > $nlength) {
+      // Determine lengths which we want to search for
+      if ($length > 3) {
+        // 5 letter word matches down to 4 letter words
+        $comp = 1 / (4 - $nlength + 1);
+      }
+      if ($length > 5) {
+        // 6 and 7 letter words match down to 5 letter words
+        $comp = 1 / (5 - $nlength + 1);
+      }
+      if ($length > 7) {
+        // anything larger matches down 2 letters than its own length
+        $comp = 1 / ($length - 2 - $nlength + 1);
+      }
+      $comp = number_format($comp + .001, 3) * 100;
+      for ($i=0; $i < $length - 2; $i++) {
+        $clause .= " (ngram = '". drupal_substr($word, $i, $nlength) ."' AND completeness <". $comp .") OR";
+      }
+    }
+
+    // Words as long as ngrams length are inserted as is.
+    else {
+      $clause .= " ngram = '". $word ."' OR";
+    }
+  }
+
+  $clause = preg_replace("/ OR$/", '', $clause);
+
+  // @todo: Fix the minimum completeness so that a single qgram match doesn't necessarily return a match
+  $min_completeness = check_plain(variable_get('fuzzysearch_min_completeness', 40));
+
+  // Set limit if not NULL.
+  $limit_sql = $limit ? 'LIMIT '. $limit : '';
+  $limit = $limit ? $limit : 10;
+
+  // Get content types to exclude from results. They are still indexed. Check
+  // for empty types in case no types have been exclude or admin form not saved.
+  $types = array_filter(variable_get('fuzzysearch_nodetypes', array('')));
+
+  // Build the query args and placeholders.
+  $args = $types = !empty($types) ? $types : array('');
+  $args[] = $min_completeness;
+  $placeholders = db_placeholders($types, 'text');
+
+  // Main query
+  $sql = "
+    SELECT *, n.nid, n.type, SUM(percent) AS completeness,
+    SUM(score) AS score FROM (SELECT n.nid, n.type, s.ngram, SUM(completeness) percent, SUM(score) score
+    FROM {fuzzysearch_index} AS s
+    LEFT JOIN {node} AS n ON (n.nid = s.nid)
+    WHERE (($clause) AND n.status = 1
+    AND n.type NOT IN ($placeholders))
+    GROUP BY word_id HAVING percent > %d) AS n
+    GROUP BY n.nid ORDER BY completeness DESC, score DESC";
+
+  // Because pager_query() doesn't process args in the count query, we're just
+  // using the variable. This has been validated in the settings form validation.
+  $sqlcount =  "SELECT COUNT(DISTINCT(n.nid)) FROM
+    (SELECT n.nid, CEILING(SUM(completeness)) completeness, SUM(score) score
+    FROM {fuzzysearch_index} AS n
+    WHERE $clause
+    GROUP BY word_id
+    HAVING SUM(completeness) > $min_completeness
+    ORDER BY completeness DESC, score DESC $limit_sql) AS n";
+
+  $sql = db_rewrite_sql($sql);
+  $sql_count = db_rewrite_sql($sql_count);
+  $pager_results = pager_query($sql, $limit, 0, $sqlcount, $args);
+
+  // Load the matched nodes.
+  while ($row = db_fetch_object($pager_results)) {
+    $node = node_load($row->nid);
+    $node->score = $row->score;
+    $node->completeness = $row->completeness;
+    // Query the matched nodes for the search ngrams. We use this for fuzzy
+    // highlighting of misspelled words. We do this per node to narrow
+    // the possible false ngrams when a misspelled ngram matches a real one.
+    // This could still return some false ngrams, but that's why it's fuzzy.
+    $sql_ngrams = "
+    SELECT s.ngram
+    FROM {fuzzysearch_index} s
+    LEFT JOIN {node} n ON (n.nid = s.nid)
+    WHERE (($clause) AND n.nid = $row->nid AND n.status = 1
+    AND n.type NOT IN ($placeholders))";
+
+    $ngrams = db_query($sql_ngrams, $args);
+    $clean_grams = array();
+    while ($ngram = db_fetch_object($ngrams)) {
+      $clean_grams[] = $ngram->ngram;
+    }
+    // Ngrams can occur multiple times, so filter.
+    $clean_grams =  array_unique($clean_grams);
+
+    // This will hold our search terms.
+    $clean_words = explode(' ', $query);
+
+    // Now we rebuild the words stripping out misspelled ngrams.
+    foreach ($clean_words as $key => $clean_word) {
+      $pos = array();
+      $bad_positions = array();
+      $len = drupal_strlen($clean_word);
+      // Ignore search terms under 2 characters.
+      if ($len >= 3) {
+        // Get the position of each good hit.
+        foreach ($clean_grams as $n => $gram) {
+          if ($multibyte == UNICODE_MULTIBYTE) {
+            if (mb_stripos($clean_word, $gram) !== FALSE) {
+              $pos[mb_stripos($clean_word, $gram)] = $gram;
+            }
+          }
+          // No multibyte.
+          else {
+            if (stripos($clean_word, $gram) !== FALSE) {
+              $pos[stripos($clean_word, $gram)] = $gram;
+            }
+          }
+        }
+        ksort($pos);
+
+        // Start with a dummy word at the right length, but only if there are
+        // some matching ngram hits.
+        $newword = '';
+        if (count($pos)) {
+          $newword = str_pad('', $len, '.');
+        }
+        $hits = $misses = 0;
+
+        // Check character by character for ngram matches. We don't need to check
+        // beyond the last $nlength number of characters.
+        for ($i = 0; $i <= $len - $nlength; $i++) {
+          // This is a match, so insert it into our dummy word.
+          if (isset($pos[$i])) {
+
+            $newword =  drupal_substr($newword, 0, $i) . $pos[$i] . drupal_substr($newword, $i + $nlength, $len);
+            ++$hits;
+          }
+
+          // This is a miss, so replace with a wildcard.
+          else {
+            // But don't overwrite a letter, only a '.' .
+            if(drupal_substr($newword, $i, 1) == '.') {
+              $newword = ($i == 0 || $i > $len - $nlength) ? $newword : drupal_substr($newword, 0, $i) . '.+' . drupal_substr($newword, $i + $len);
+            }
+            ++$misses;
+          $bad_positions[] = $i;
+          }
+        }
+
+        // Only keep our rebuilt word if it beats our minimum spelling match score.
+        if (($hits)/($len - 2) * 100 > $min_spelling) {
+
+          // 2 consecutive misses could indicate a missing letter, so find the likely
+          // missing position and replace with the wildcard.
+          if (count($bad_positions) >= 2) {
+            foreach ($bad_positions as $bad_key => $bad_pos) {
+              if ($bad_positions[$bad_key + 1] == ($bad_pos + 1)) {
+                $newword = drupal_substr($newword, 0, $bad_pos) . '.' . drupal_substr($newword, $bad_pos + 1, $len);
+              }
+            }
+          }
+          // Remove multiple, trailing and leading wildcards.
+          $newword = preg_replace("/\../", ".+", $newword);
+          $newword = trim(preg_replace("/\.+\.+/", ".+", $newword), '.+');
+          $clean_words[$key] = $newword;
+        }
+        else {
+          unset($clean_words[$key]);
+        }
+      }
+      // Under 2 characters, so unset the word.
+      else {
+        unset($clean_words[$key]);
+      }
+    }
+    if ($theme == 'node') {
+      // Build the node body. This grabs cck field labels and values. Remove
+      // double spaces added for html legibility by cck.
+      $node->build_mode = NODE_BUILD_SEARCH_RESULT ;
+      $node = node_build_content($node, FALSE, FALSE);
+      $node->body = preg_replace("/ +/"," ", drupal_render($node->content));
+
+      // Build a replacement node body containing sections of text with the found
+      // words, with leading and trailing text.
+      $node->body = strip_tags($node->body);
+      $section = array();
+      $section_length = array();
+      foreach ($clean_words as $k => $word) {
+        $location = 0;
+        // If the word is found, add its position to $section.
+        while (preg_match('/'. $word .'/i', $node->body, $matches, PREG_OFFSET_CAPTURE, $location) && $word != '') {
+          // Make sure we didn't traverse any word breaks by checking for spaces.
+          // Pretty sure we don't need mb_stripos() here because we don't actually
+          // care about the position
+          if (!stripos($matches[0][0], ' ')) {
+            $section[] = $matches[0][1];
+            $section_length[$matches[0][1]] = drupal_strlen($word);
+            $clean_words[$k] = $matches[0][0];
+          }
+          // Increase $location by one so we don't find the previous location.
+          $location =  $matches[0][1] + 1;
+        }
+      }
+      // Because we found words one by one, the locations are out of order. Sort
+      // so that the locations are in natural order.
+      asort($section);
+      ksort($section_length);
+      $section = array_values($section);
+      $section_length = array_values($section_length);
+      $p = 0;
+      $found = $newbody = '';
+      $trail = $lead = $excerpt / 2;
+      $start = $section[0];
+      while (isset($section[$p])) {
+        // If the current section is within the previous, let's not create a new one
+        // so we don't have any duplicate text.
+        if ($section[$p] + $lead + $section_length[$p] > $section[$p + 1] && $section[$p + 1]) {
+          $trail = $section[$p+1] + $section_length[$p+1] + $lead - $start;
+          $p++;
+          continue;
+        }
+        // Put an excerpt into our replacement node body, with the
+        // found word in the center.
+        $found = $start - $lead < 0 ? drupal_substr($node->body, 0, $excerpt) : drupal_substr($node->body, $start - $lead, $trail + $lead);
+        $newbody .= '...'. $found .'... ';
+        $p++;
+        $start = $section[$p];
+        $trail = $lead;
+      }
+      // Wrap the found words in a <strong> tag to highlight them.
+      $newbody = preg_replace('/' . $boundary . '[^' . PREG_CLASS_SEARCH_EXCLUDE . PREG_CLASS_CJK . ']*' . '(' . implode('|', $clean_words) . ')' . '[^' . PREG_CLASS_SEARCH_EXCLUDE . PREG_CLASS_CJK . ']*' . $boundary . '/iu', '<strong>\0</strong>', $newbody);
+
+      $node->body = $newbody;
+      $results[] = $node;
+    }
+    else {
+      $results[] = $node;
+    }
+  }
+  if ($results) {
+    switch ($theme) {
+      case 'node';
+        $output .= theme('fuzzysearch_results', $results);
+        $output .= theme('pager', NULL, 10);
+        break;
+      case 0;
+        $output .= theme('fuzzysearch_results_title', $results);
+        $output .= $limit ? theme('pager', NULL, 10) : '';
+    }
+  }
+  else {
+    $output = '<p>'. t('No matches were found.') .'</p>';
+  }
+  return $output;
+}
+
+/**
+ * Gather results from the index and build result page
+ */
+function fuzzysearch_show_results($keys = '') {
+  drupal_set_title(check_plain($keys));
+  drupal_add_css(drupal_get_path('module', 'fuzzysearch') .'/fuzzysearch.css', 'module');
+  $output .= '<div class="clear-block">';
+  $output .= drupal_get_form('fuzzysearch_form', $keys);
+  $output .= '</div>';
+  $output .= fuzzysearch_process($keys);
+  return $output;
+}
+
+/**
+ * Theme the search results
+ */
+function theme_fuzzysearch_results($results) {
+  drupal_set_title('Search results');
+  $output .= '<div class="box">';
+  $output .= '<div class="search-results">';
+  foreach ($results as $result) {
+    $i++;
+    $odd = $i%2 ? 'odd' : 'even';
+    $output .= '<div class="fuzzysearch-result '. $odd .'">';
+    $output .= theme('fuzzysearch_result', $result);
+    if (variable_get('fuzzysearch_debug_score', FALSE)) {
+      $output .= '<p>'. t('Completeness: ') . number_format($result->completeness) . t(' Score: ') . number_format($result->score) .'</p>';
+    }
+    $output .= '</div>';
+  }
+  $output .= '</div></div>';
+  return $output;
+}
+
+function theme_fuzzysearch_results_title($results) {
+  $output .= '<div class="box">';
+  $output .= '<ul class="search-results">';
+  foreach ($results as $result) {
+    $i++;
+    $odd = $i%2 ? 'odd' : 'even';
+    $output .= '<li>'. l($result->title, drupal_get_path_alias('node/'. $result->nid)) .'</li>';
+  }
+  $output .= '</ul></div>';
+  return $output;
+}
+
+/*
+ * Filter stop words from the query.
+ *
+ * @param $text
+ *   The search text to be filtered.
+ */
+function _fuzzysearch_stop_words($text) {
+  $stop_words = array(
+    'a',
+    'able',
+    'about',
+    'above',
+    'abroad',
+    'according',
+    'accordingly',
+    'across',
+    'actually',
+    'adj',
+    'after',
+    'afterwards',
+    'again',
+    'against',
+    'ago',
+    'ahead',
+    'aint',
+    'all',
+    'allow',
+    'allows',
+    'almost',
+    'alone',
+    'along',
+    'alongside',
+    'already',
+    'also',
+    'although',
+    'always',
+    'am',
+    'amid',
+    'amidst',
+    'among',
+    'amongst',
+    'an',
+    'and',
+    'another',
+    'any',
+    'anybody',
+    'anyhow',
+    'anyone',
+    'anything',
+    'anyway',
+    'anyways',
+    'anywhere',
+    'apart',
+    'appear',
+    'appreciate',
+    'appropriate',
+    'are',
+    'arent',
+    'around',
+    'as',
+    'as',
+    'aside',
+    'ask',
+    'asking',
+    'associated',
+    'at',
+    'available',
+    'away',
+    'awfully',
+    'b',
+    'back',
+    'backward',
+    'backwards',
+    'be',
+    'became',
+    'because',
+    'become',
+    'becomes',
+    'becoming',
+    'been',
+    'before',
+    'beforehand',
+    'begin',
+    'behind',
+    'being',
+    'believe',
+    'below',
+    'beside',
+    'besides',
+    'best',
+    'better',
+    'between',
+    'beyond',
+    'both',
+    'brief',
+    'but',
+    'by',
+    'c',
+    'came',
+    'can',
+    'cannot',
+    'cant',
+    'cant',
+    'caption',
+    'cause',
+    'causes',
+    'certain',
+    'certainly',
+    'changes',
+    'clearly',
+    'cmon',
+    'co',
+    'co.',
+    'com',
+    'come',
+    'comes',
+    'concerning',
+    'consequently',
+    'consider',
+    'considering',
+    'contain',
+    'containing',
+    'contains',
+    'corresponding',
+    'could',
+    'couldnt',
+    'course',
+    'cs',
+    'currently',
+    'd',
+    'dare',
+    'darent',
+    'definitely',
+    'described',
+    'despite',
+    'did',
+    'didnt',
+    'different',
+    'directly',
+    'do',
+    'does',
+    'doesnt',
+    'doing',
+    'done',
+    'dont',
+    'down',
+    'downwards',
+    'during',
+    'e',
+    'each',
+    'edu',
+    'eg',
+    'eight',
+    'eighty',
+    'either',
+    'else',
+    'elsewhere',
+    'end',
+    'ending',
+    'enough',
+    'entirely',
+    'especially',
+    'et',
+    'etc',
+    'even',
+    'ever',
+    'evermore',
+    'every',
+    'everybody',
+    'everyone',
+    'everything',
+    'everywhere',
+    'ex',
+    'exactly',
+    'example',
+    'except',
+    'f',
+    'fairly',
+    'far',
+    'farther',
+    'few',
+    'fewer',
+    'fifth',
+    'first',
+    'five',
+    'followed',
+    'following',
+    'follows',
+    'for',
+    'forever',
+    'former',
+    'formerly',
+    'forth',
+    'forward',
+    'found',
+    'four',
+    'from',
+    'further',
+    'furthermore',
+    'g',
+    'get',
+    'gets',
+    'getting',
+    'given',
+    'gives',
+    'go',
+    'goes',
+    'going',
+    'gone',
+    'got',
+    'gotten',
+    'greetings',
+    'h',
+    'had',
+    'hadnt',
+    'half',
+    'happens',
+    'hardly',
+    'has',
+    'hasnt',
+    'have',
+    'havent',
+    'having',
+    'he',
+    'hed',
+    'hell',
+    'hello',
+    'help',
+    'hence',
+    'her',
+    'here',
+    'hereafter',
+    'hereby',
+    'herein',
+    'heres',
+    'hereupon',
+    'hers',
+    'herself',
+    'hes',
+    'hi',
+    'him',
+    'himself',
+    'his',
+    'hither',
+    'hopefully',
+    'how',
+    'howbeit',
+    'however',
+    'hundred',
+    'i',
+    'id',
+    'ie',
+    'if',
+    'ignored',
+    'ill',
+    'im',
+    'immediate',
+    'in',
+    'inasmuch',
+    'inc',
+    'inc.',
+    'indeed',
+    'indicate',
+    'indicated',
+    'indicates',
+    'inner',
+    'inside',
+    'insofar',
+    'instead',
+    'into',
+    'inward',
+    'is',
+    'isnt',
+    'it',
+    'itd',
+    'itll',
+    'its',
+    'its',
+    'itself',
+    'ive',
+    'j',
+    'just',
+    'k',
+    'keep',
+    'keeps',
+    'kept',
+    'know',
+    'known',
+    'knows',
+    'l',
+    'last',
+    'lately',
+    'later',
+    'latter',
+    'latterly',
+    'least',
+    'less',
+    'lest',
+    'let',
+    'lets',
+    'like',
+    'liked',
+    'likely',
+    'likewise',
+    'little',
+    'look',
+    'looking',
+    'looks',
+    'low',
+    'lower',
+    'ltd',
+    'm',
+    'made',
+    'mainly',
+    'make',
+    'makes',
+    'many',
+    'may',
+    'maybe',
+    'maynt',
+    'me',
+    'mean',
+    'meantime',
+    'meanwhile',
+    'merely',
+    'might',
+    'mightnt',
+    'mine',
+    'minus',
+    'miss',
+    'more',
+    'moreover',
+    'most',
+    'mostly',
+    'mr',
+    'mrs',
+    'much',
+    'must',
+    'mustnt',
+    'my',
+    'myself',
+    'n',
+    'name',
+    'namely',
+    'nd',
+    'near',
+    'nearly',
+    'necessary',
+    'need',
+    'neednt',
+    'needs',
+    'neither',
+    'never',
+    'neverf',
+    'neverless',
+    'nevertheless',
+    'new',
+    'next',
+    'nine',
+    'ninety',
+    'no',
+    'nobody',
+    'non',
+    'none',
+    'nonetheless',
+    'noone',
+    'no-one',
+    'nor',
+    'normally',
+    'not',
+    'nothing',
+    'notwithstanding',
+    'novel',
+    'now',
+    'nowhere',
+    'o',
+    'obviously',
+    'of',
+    'off',
+    'often',
+    'oh',
+    'ok',
+    'okay',
+    'old',
+    'on',
+    'once',
+    'one',
+    'ones',
+    'ones',
+    'only',
+    'onto',
+    'opposite',
+    'or',
+    'other',
+    'others',
+    'otherwise',
+    'ought',
+    'oughtnt',
+    'our',
+    'ours',
+    'ourselves',
+    'out',
+    'outside',
+    'over',
+    'overall',
+    'own',
+    'p',
+    'particular',
+    'particularly',
+    'past',
+    'per',
+    'perhaps',
+    'placed',
+    'please',
+    'plus',
+    'possible',
+    'presumably',
+    'probably',
+    'provided',
+    'provides',
+    'q',
+    'que',
+    'quite',
+    'qv',
+    'r',
+    'rather',
+    'rd',
+    're',
+    'really',
+    'reasonably',
+    'recent',
+    'recently',
+    'regarding',
+    'regardless',
+    'regards',
+    'relatively',
+    'respectively',
+    'right',
+    'round',
+    's',
+    'said',
+    'same',
+    'saw',
+    'say',
+    'saying',
+    'says',
+    'second',
+    'secondly',
+    'see',
+    'seeing',
+    'seem',
+    'seemed',
+    'seeming',
+    'seems',
+    'seen',
+    'self',
+    'selves',
+    'sensible',
+    'sent',
+    'serious',
+    'seriously',
+    'seven',
+    'several',
+    'shall',
+    'shant',
+    'she',
+    'shed',
+    'shell',
+    'shes',
+    'should',
+    'shouldnt',
+    'since',
+    'six',
+    'so',
+    'some',
+    'somebody',
+    'someday',
+    'somehow',
+    'someone',
+    'something',
+    'sometime',
+    'sometimes',
+    'somewhat',
+    'somewhere',
+    'soon',
+    'sorry',
+    'specified',
+    'specify',
+    'specifying',
+    'still',
+    'sub',
+    'such',
+    'sup',
+    'sure',
+    't',
+    'take',
+    'taken',
+    'taking',
+    'tell',
+    'tends',
+    'th',
+    'than',
+    'thank',
+    'thanks',
+    'thanx',
+    'that',
+    'thatll',
+    'thats',
+    'thats',
+    'thatve',
+    'the',
+    'their',
+    'theirs',
+    'them',
+    'themselves',
+    'then',
+    'thence',
+    'there',
+    'thereafter',
+    'thereby',
+    'thered',
+    'therefore',
+    'therein',
+    'therell',
+    'therere',
+    'theres',
+    'theres',
+    'thereupon',
+    'thereve',
+    'these',
+    'they',
+    'theyd',
+    'theyll',
+    'theyre',
+    'theyve',
+    'thing',
+    'things',
+    'think',
+    'third',
+    'thirty',
+    'this',
+    'thorough',
+    'thoroughly',
+    'those',
+    'though',
+    'three',
+    'through',
+    'throughout',
+    'thru',
+    'thus',
+    'till',
+    'to',
+    'together',
+    'too',
+    'took',
+    'toward',
+    'towards',
+    'tried',
+    'tries',
+    'truly',
+    'try',
+    'trying',
+    'ts',
+    'twice',
+    'two',
+    'u',
+    'un',
+    'under',
+    'underneath',
+    'undoing',
+    'unfortunately',
+    'unless',
+    'unlike',
+    'unlikely',
+    'until',
+    'unto',
+    'up',
+    'upon',
+    'upwards',
+    'us',
+    'use',
+    'used',
+    'useful',
+    'uses',
+    'using',
+    'usually',
+    'v',
+    'value',
+    'various',
+    'versus',
+    'very',
+    'via',
+    'viz',
+    'vs',
+    'w',
+    'want',
+    'wants',
+    'was',
+    'wasnt',
+    'way',
+    'we',
+    'wed',
+    'welcome',
+    'well',
+    'well',
+    'went',
+    'were',
+    'were',
+    'werent',
+    'weve',
+    'what',
+    'whatever',
+    'whatll',
+    'whats',
+    'whatve',
+    'when',
+    'whence',
+    'whenever',
+    'where',
+    'whereafter',
+    'whereas',
+    'whereby',
+    'wherein',
+    'wheres',
+    'whereupon',
+    'wherever',
+    'whether',
+    'which',
+    'whichever',
+    'while',
+    'whilst',
+    'whither',
+    'who',
+    'whod',
+    'whoever',
+    'whole',
+    'wholl',
+    'whom',
+    'whomever',
+    'whos',
+    'whose',
+    'why',
+    'will',
+    'willing',
+    'wish',
+    'with',
+    'within',
+    'without',
+    'wonder',
+    'wont',
+    'would',
+    'wouldnt',
+    'x',
+    'y',
+    'yes',
+    'yet',
+    'you',
+    'youd',
+    'youll',
+    'your',
+    'youre',
+    'yours',
+    'yourself',
+    'yourselves',
+    'youve',
+    'z',
+    'zero',
+  );
+
+  $terms = explode(' ', $text);
+
+  // Filter stop words.
+  for ($i = 0; $i < count($terms); $i++) {
+    if (in_array(trim($terms[$i]), $stop_words)) {
+      unset($terms[$i]);
+    }
+  }
+
+  return implode(' ', $terms);
+}

@@ -1,0 +1,675 @@
+<?php
+// $Id: fsrange.module,v 1.1.2.1 2009/09/09 13:21:28 zyxware Exp $
+
+/**
+ * @file
+ * Support range facets.
+ *
+ * Please read API.txt to understand the concepts in this source code.
+ */
+
+/**
+ * Returns all range-capable fields defined via hook_fsrange_fields(). This
+ * hook is what connects fields to the handlers driving them.
+ *
+ * @param $field_name
+ *   Return this single field.
+ */
+function fsrange_fields($field_name = NULL) {
+  static $fields;
+  if (!isset($fields)) {
+    $fields = module_invoke_all('fsrange_fields');
+  }
+  if (isset($field_name)) {
+    if (isset($fields[$field_name])) {
+      return $fields[$field_name];
+    }
+    else {
+      return NULL;
+    }
+  }
+  return $fields;
+}
+
+/**
+ * Instantiate a handler driving a field.
+ *
+ * @param $field_name
+ *   The name of the field, as defined in hook_fsrange_fields().
+ * @param $options
+ *   Instantiate the handler with these options. Each handler has
+ *   various options set via its administration form. If none
+ *   specified, default options will be used.
+ * @return
+ *   The object, or NULL if instantiation not possible.
+ */
+function fsrange_instantiate_handler($field_name, $options = NULL) {
+  if ($field = fsrange_fields($field_name)) {
+    if (class_exists($class_name = $field['handler'])) {
+      $obj = new $class_name();
+      $obj->init($field, $options);
+      return $obj;
+    }
+  }
+  return NULL;
+}
+
+/**
+ * Checks whether a certain field is defined.
+ *
+ * We use this function in a place or two to make sure we are not
+ * using a field whose module is disbaled.
+ */
+function fsrange_is_field_defined($field_name) {
+  return (bool)fsrange_fields($field_name);
+}
+
+// ---------------------------------------------------------------------------
+// A handful of functions to manipulate (load, save, delete) 'facet structures'.
+// These aren't really 'facet objects' but simply the records in the DB table.
+
+/**
+ * Returns the facet structures defined on our system.
+ *
+ * @param $rfid
+ *   If non-null, return only the facet structure with this ID
+ */
+function fsrange_facets($rfid = NULL) {
+  static $facets = NULL;
+  if (!isset($facets)) {
+    $facets = array();
+    $res = db_query("SELECT * FROM {fsrange_facets} ORDER BY label");
+    while ($facet = db_fetch_array($res)) {
+      $facet['options'] = unserialize($facet['options']);
+      $facets[$facet['rfid']] = $facet;
+    }
+  }
+  if (isset($rfid)) {
+    return $facets[$rfid];
+  }
+  else {
+    return $facets;
+  }
+}
+
+/**
+ * Saves a facet structure. Used by the administration pages only.
+ */
+function fsrange_save_facet($rfid, $field_name, $label, $description, $options) {
+  if (!$rfid) {
+    db_query("INSERT INTO {fsrange_facets} (field_name, label, description, options) VALUES ('%s', '%s', '%s', '%s')",
+      $field_name, $label, $description, serialize($options));
+    drupal_set_message(t('Facet %label created', array('%label' => $label)));
+  } else {
+    db_query("UPDATE {fsrange_facets} SET field_name = '%s', label = '%s', description = '%s', options = '%s' WHERE rfid = %d",
+      $field_name, $label, $description, serialize($options), $rfid);
+    drupal_set_message(t('Facet %label updated', array('%label' => $label)));
+  }
+}
+
+/**
+ * Deletes a facet structure. Used by the administration pages only.
+ */
+function fsrange_delete($rfid) {
+  $facet = fsrange_facets($rfid);
+  db_query("DELETE FROM {fsrange_facets} WHERE rfid = %d", $rfid);
+  db_query("DELETE FROM {faceted_search_filters} WHERE filter_key = '%s'", _fsrange_key($facet));
+  drupal_set_message(t('Facet %facet deleted.', array('%facet' => $facet['label'])));
+}
+
+// ---------------------------------------------------------------------------
+// Here begins the Faceted Search stuff.
+
+/**
+ * Implementation of hook_faceted_search_collect().
+ */
+function fsrange_faceted_search_collect(&$facets, $domain, $env_id, $filter, $arg = NULL) {
+  switch ($domain) {
+    case 'facets':
+      foreach (fsrange_facets() as $facet_struct) {
+        $key = _fsrange_key($facet_struct);
+        $facets[] = new fsrange_facet($facet_struct);
+      }
+      break;
+        
+    case 'all':
+      foreach (fsrange_facets() as $facet_struct) {
+        $key = _fsrange_key($facet_struct);
+        // Is this facet allowed?
+        if ((!isset($filter) || isset($filter[$key][1])) && fsrange_is_field_defined($facet_struct['field_name'])) {
+          // Yep.
+          $facets[] = new fsrange_facet($facet_struct);
+        }
+      }
+      break;
+
+    case 'text':
+      foreach (fsrange_facets() as $facet_struct) {
+        $key = _fsrange_key($facet_struct);
+        // Is this facet is allowed?
+        if ((!isset($filter) || isset($filter[$key][1])) && fsrange_is_field_defined($facet_struct['field_name'])) {
+          // Yep. Now scan the search text for a '$key:range_id' token,
+          // and, if exists, create a facet for it.
+          if ($range_id = faceted_search_quoted_query_extract($arg, $key)) {
+            // Unescape the value.
+            $range_id = strtr($range_id, array('\"' => '"', '\\\\' => '\\'));
+            $facets[] = new fsrange_facet($facet_struct, $range_id);
+            // Remove the parsed token from the search text.
+            $arg = faceted_search_quoted_query_insert($arg, $key);
+          }
+        }
+      }
+      break;
+
+    case 'node':
+      // TODO
+      break;
+  }
+}
+
+/**
+ * Calculates the key to use for this range facet. A 'key' is the identifier
+ * appearing in the search query ('key:text').
+ *
+ * The ID (rfid) is there because several different range facets may use
+ * the same underlying field.
+ *
+ * The field_name is there for readability only.
+ *
+ * TODO: Should we let the admin choose the key?
+ */
+function _fsrange_key($facet_struct) {
+  return 'range_'. $facet_struct['rfid'] .'_'. $facet_struct['field_name'];
+}
+
+// ---------------------------------------------------------------------------
+// Implementation of the category and facet classes.
+
+/**
+ * A category representing a range. 
+ */
+class fsrange_category extends faceted_search_category {
+
+  var $range_id;
+  var $leaf;
+
+  var $handler;
+
+  /**
+   * Constructs a range category object.
+   */
+  function fsrange_category(&$facet, $range_id, $count = NULL) {
+    parent::faceted_search_category($count);
+    $this->range_id = $range_id;
+    $this->handler = &$facet->handler;
+
+    if ($this->handler->range_id__contains_leaf($range_id)) {
+      $this->leaf = $this->handler->range_id__get_leaf($range_id);
+    }
+    else {
+      $this->leaf = NULL;
+    }
+  }
+
+  /**
+   * Overrides base. Returns the label of this category.
+   *
+   * @param $html
+   *   Whether HTML is allowed.
+   */
+  function get_label($html = FALSE) {
+    if (isset($this->leaf)) {
+      return $this->handler->render_leaf($this->leaf, $html);
+    }
+    else {
+      return $this->handler->render_range($this->range_id, $html);
+    }
+  }
+
+  /**
+   * Overrides base. Filters the view by $this->range_id.
+   */
+  function build_results_query(&$query) {
+    $qualified_columns = $this->handler->join_table($query, TRUE);
+    if (isset($this->leaf)) {
+      // If this is a leaf category, calculate leaf range IDs for all leaves in this level.
+      $calculated_range_id = $this->handler->get_leaves_formula($qualified_columns, $this->handler->range_id__remove_leaf($this->range_id));
+    }
+    else {
+      // Calculate range IDs for all fields in this level.
+      $calculated_range_id = $this->handler->get_range_id_formula($qualified_columns, $this->handler->range_id__get_parent($this->range_id),
+        // When handling overlapping ranges, don't let other ranges 'eat up' our values:
+        $this->handler->options['accumulate_count'] ? $this->range_id : NULL);
+    }
+    // Finally, the filtering itself:
+    $query->add_where("$calculated_range_id = '%s'", $this->range_id);
+  }
+
+  /**
+   * Overrides base. Retrieves the subcategories ("ranges", in our lingua).
+   */
+  function build_subcategories_query(&$query) {
+    if (isset($this->leaf)) {
+      // If this is a leaf category, no subcategories exist.
+      return FALSE;
+    }
+    $qualified_columns = $this->handler->join_table($query);
+    $calculated_range_id = $this->handler->get_range_id_formula($qualified_columns, $this->range_id);
+    if ($calculated_range_id) {
+      $query->add_field(NULL, $calculated_range_id, 'range_id');
+      $query->add_groupby('range_id');
+      $query->add_having('range_id IS NOT NULL');
+      // For some reason, the above 'having' doesn't have any effect. Weird.
+      // The following 'having' does it. TODO: investigate!
+      $query->add_having("range_id <> 'some magic string'");
+      return TRUE;
+    }
+    else {
+      // We were told that there are no sub-ranges defined.
+      // At this point we can either show leaves, or abort.
+      if ($this->handler->options['show_leaves']) {
+        // By now the nodes are filtered to those containing values in a
+        // certain range. However, for scenarios where nodes may have multiple
+        // values for a field, we still need to filter the values themselves.
+        $parent_range_id = $this->handler->range_id__get_parent($this->range_id);
+        // First, calculate the range IDs of the fields in this level...
+        $calculated_range_id = $this->handler->get_range_id_formula($qualified_columns, $parent_range_id,
+            // when handling overlapping ranges, don't let other ranges 'eat up' our values:
+            $this->handler->options['accumulate_count'] ? $this->range_id : NULL);
+        // ...And filter out the fields that do not reside in _this_ category:
+        $query->add_where("$calculated_range_id = '%s'", $this->range_id);
+
+        // Now, in the the resultset we want to have the *leaf* range ID:
+        $calculated_leaf_range_id = $this->handler->get_leaves_formula($qualified_columns, $this->range_id);
+        $query->add_field(NULL, $calculated_leaf_range_id, 'range_id');
+
+        // Finally, we want to gorup by the values (which the leaf range ID reflects):
+        $query->add_groupby('range_id');
+
+        // Signal to whoever wants to know, that we're showing leaves.
+        $this->_showing_leaves = TRUE;
+        return TRUE;
+      }
+      else {
+        return FALSE;
+      }
+    }
+  }
+}
+
+/**
+ * The range facet.
+ */
+class fsrange_facet extends faceted_search_facet {
+
+  var $field_name;
+  var $label;
+  var $description;
+  var $options;
+
+  var $handler;
+
+  /**
+   * Constructs a range facet object.
+   *
+   * @param $range_id
+   *   Is not NULL if we're asked to create a category (that is, a "range") object
+   *   as well.
+   */
+  function fsrange_facet($facet_struct, $range_id = NULL) {
+
+    foreach (array('field_name', 'label', 'description', 'options') as $attr) {
+      $this->$attr = $facet_struct[$attr];
+    }
+
+    $active_path = array();
+    if (isset($range_id)) {
+      $this->_build_handler(); // Subcategories always need the handler.
+                               // Alas! because of PHP4 it's not easy to do lazy loading.
+      // If we're asked to create a category, we need to create all parent
+      // categories as well:
+      $levels = array();
+      foreach ($this->handler->range_id__get_levels($range_id) as $level) {
+        $levels[] = $level;
+        $active_path[] = new fsrange_category($this, $this->handler->range_id__from_levels($levels));
+      }
+      // range_id__get_levels() doesn't return the leaf, so we create
+      // its category explicitly:
+      if ($this->handler->range_id__contains_leaf($range_id)) {
+        $active_path[] = new fsrange_category($this, $range_id);
+      }
+    }
+
+    parent::faceted_search_facet(_fsrange_key($facet_struct), $active_path);
+
+    // When doing ranges, sort by their given order is the most desired;
+    // so let's make this the default.
+    $this->set_sort('range_id_asc');
+  }
+  
+  /**
+   * Instantiate this field's handler. 
+   */
+  function _build_handler() {
+    if (!isset($this->handler)) {
+      $this->handler = fsrange_instantiate_handler($this->field_name, $this->options);
+    }
+  }
+
+  /**
+   * Overrides base.
+   */
+  function get_id() {
+    // Not used. The actual range facet is determined by the key.
+    return 1;
+  }
+
+  /**
+   * Overrides base. Returns the search string to use in the query.
+   */
+  function get_text() {
+    if ($category = $this->get_active_category()) {
+      // Quote and escape the value.
+      return '"'. strtr($category->range_id, array('"' => '\"', '\\' => '\\\\')) .'"';
+    }
+    return '';
+  }
+  
+  /**
+   * Overrides base. Returns the available sort options for this facet.
+   */
+  function get_sort_options() {
+    $options = parent::get_sort_options();
+    $options['range_id_asc'] = t('Range ID, asc');
+    $options['range_id_desc'] = t('Range ID, desc');
+    return $options;
+  }
+
+  /**
+   * Handler for the 'count' sort criteria.
+   */
+  function build_sort_query_count(&$query) {
+    $query->add_orderby('count', 'DESC');
+    $query->add_orderby('range_id', 'ASC');
+  }
+
+  /**
+   * Handler for the 'range_id_asc' sort criteria.
+   */
+  function build_sort_query_range_id_asc(&$query) {
+    $query->add_orderby('range_id', 'ASC');
+  }
+  
+  /**
+   * Handler for the 'range_id_desc' sort criteria.
+   */
+  function build_sort_query_range_id_desc(&$query) {
+    $query->add_orderby('range_id', 'DESC');
+  }
+
+  /**
+   * Overrides base. Retrieves the root categories ("ranges", in our lingua).
+   */
+  function build_root_categories_query(&$query) {
+    $this->_build_handler();
+    $qualified_columns = $this->handler->join_table($query);
+    $calculated_range_id = $this->handler->get_range_id_formula($qualified_columns);
+    $query->add_field(NULL, $calculated_range_id, 'range_id');
+    $query->add_groupby('range_id');
+    $query->add_having('range_id IS NOT NULL');
+    // For some reason, the above 'having' doesn't have any effect. Weird.
+    // The following 'having' does it. TODO: investigate!
+    $query->add_having("range_id <> 'some magic string'");
+    return TRUE;
+  }
+
+  /**
+   * Overrides base. Builds category objects from the resultset.
+   */
+  function build_categories($results) {
+    $categories = array();
+    $sum = 0;
+    while ($o = db_fetch_object($results)) {
+      if ($this->handler->options['accumulate_count'] && !$this->_showing_leaves()) {
+        $count = $sum += $o->count;
+      }
+      else {
+        $count = $o->count;
+      }
+      $categories[] = new fsrange_category($this, $o->range_id, $count);
+    }
+    return $categories;
+  }
+
+  /**
+   * Are we currently showing leaves?
+   */ 
+  function _showing_leaves() {
+    if ($category = $this->get_active_category()) {
+      return !empty($category->_showing_leaves);
+    }
+  }
+
+  /**
+   * Overrides base. Returns the label of this facet.
+   *
+   * @param $html
+   *   Whether HTML is allowed.
+   */
+  function get_label($html = FALSE) {
+    return $html ? filter_xss_admin($this->label) : strip_tags($this->label);
+  }
+  
+  /**
+   * Overrides base. Returns the facet description to help site administrators identify range facets.
+   */
+  function get_help() {
+    if ($this->description) {
+      return t('Range; @description', array('@description' => $this->description));
+    }
+    else {
+      return t('Range');
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Our own API.
+
+/**
+ * The fsrange_handler class holds all the knowledge needed to make things work.
+ * It contains the facet settings ('options', in our lingua) and it produces the
+ * SQL needed to run things. See API.txt.
+ *
+ * This class is mostly abstract.
+ *
+ * @see fsrange_basic_handler
+ */
+class fsrange_handler {
+
+  var $definition;
+  var $options;
+
+  /**
+   * Initializes the handler with necessary data. A constructor.
+   *
+   * @param $definition
+   *   How modules define this field.
+   * @param $options
+   *   How the admin customized this field --via its options form. Varying
+   *   settings that are loaded from the database. If omitted, deault options
+   *   are used.
+   */
+  function init($definition, $options = NULL) {
+    $this->definition = $definition;
+    // We don't want to simply do "$this->options = $options;" We want to
+    // sanitize things a bit.
+    $this->options = $this->get_default_options();
+    if ($options) {
+      foreach ($options as $name => $value) {
+        if (array_key_exists($name, $this->options)) {
+          $this->options[$name] = $options[$name];
+        }
+      }
+    }
+  }
+  
+  /////////////////////////////////////////////////////////////////////////
+  //
+  // Functions that deal with this handler's options, and with the options form.
+  //
+  
+  /**
+   * Provides default options for the handler. Indirectly, it also used to tell
+   * us what options the handler supports.
+   */
+  function get_default_options() {
+    return array(
+      'show_leaves' => 0,
+      
+      // If TRUE, instructs faceted_search_facet::build_categories() to include
+      // in the 'count' the counts of previous ranges. Has to do with
+      // overlapping ranges.
+      'accumulate_count' => 0,
+    );
+  }
+  
+  /**
+   * Provides a form for setting options.
+   */
+  function options_form(&$form) {
+  }
+  
+  /**
+   * Validate the options form.
+   */
+  function options_validate($form_values) {
+  }
+  
+  /////////////////////////////////////////////////////////////////////////
+  //
+  // The Juicy action!
+  //
+
+  /**
+   * Adds the field's table to the $query.
+   *
+   * @param &$query
+   *   The query object.
+   * @param $unique
+   *   Whether to generate a unique alias for the table.
+   * @return
+   *   An array with the fully qualified names of all DB columns now available. The 
+   *   first column should be the 'main' one.
+   */  
+  function join_table(&$query, $unique = FALSE) {
+    $this->_pure_virtual_called();
+  }
+
+  /**
+   * Constructs the SQL formula that returns a field's range ID. It's usually
+   * an SQL 'CASE' expression. This is the heart of this class --and of this
+   * module.
+   *
+   * @param $qualified_columns
+   *   What join_table() returns. Contains the field's columns.
+   * @param $parent_range_id
+   *   The ranges for which to compute a range ID. This is the parent of the
+   *   ranges. Pass NULL for the top-level ranges.
+   * @param $desired_range_id 
+   *   Usually, the CASE formula would contain all the ranges. Use this
+   *   paramter to restrict the formula to one range. This is necessary when
+   *   dealing with overlapping ranges (see README.txt), because it makes sure
+   *   other ranges don't 'eat up' our values.
+   * @return
+   *   The SQL formula, as string. Note: no placeholder 'arguments' are returned:
+   *   they're embeded in the string already.
+   */
+  function get_range_id_formula($qualified_columns, $parent_range_id = NULL, $desired_range_id = NULL) {
+    $this->_pure_virtual_called();
+  }
+  
+  /**
+   * Similar to the above get_range_id_formula(), except that it calculates
+   * range IDs for leaf ranges. It is used when filtering the view by a leaf value.
+   */
+  function get_leaves_formula($qualified_columns, $parent_range_id = NULL) {
+    $this->_pure_virtual_called();
+  }
+  
+  /////////////////////////////////////////////////////////////////////////
+  //
+  // Functions that handle rendering.
+  //
+
+  /**
+   * Renders a non-leaf range.
+   *
+   * @param $html
+   *   Whether outputting HTML is allowed.
+   */
+  function render_range($range_id, $html) {
+    $this->_pure_virtual_called(); 
+  }
+
+  /**
+   * Renders a leaf range.
+   *
+   * @param $html
+   *   Whether outputting HTML is allowed.
+   */
+  function render_leaf($leaf, $html) {
+    $this->_pure_virtual_called();
+  }
+  
+  /////////////////////////////////////////////////////////////////////////
+  //
+  // Functions for parsing range IDs.
+  //
+
+  /**
+   * Returns the levels corresponding to a range ID.
+   */
+  function range_id__get_levels($range_id) { $this->_pure_virtual_called(); }
+
+  /**
+   * Given an array of levels, returns the corresponding range ID.
+   *
+   * This is the opposite of range_id__get_levels().
+   */
+  function range_id__from_levels($levels, $sortable = TRUE) { $this->_pure_virtual_called(); }
+
+  /**
+   * Returns the ID of the parent range, or NULL if it's already a top-level range.
+   */
+  function range_id__get_parent($range_id) { $this->_pure_virtual_called(); }
+
+  /**
+   * Determines whether a range ID contains a 'leaf'. Such ranges point to a cetrtain value. 
+   */
+  function range_id__contains_leaf($range_id) { $this->_pure_virtual_called(); }
+
+  /**
+   * Extract the leaf from a range ID.
+   */
+  function range_id__get_leaf($range_id) { $this->_pure_virtual_called(); }
+
+  /**
+   * Returns the range ID sans the leaf.
+   */
+  function range_id__remove_leaf($range_id) { $this->_pure_virtual_called(); }
+
+  // PHP4 doesn't support pure methods... :-(
+  function _pure_virtual_called() {
+    drupal_set_message('Pure vitual method called', 'error');
+  }
+}
+
+// The query object's add_field() method doesn't support placeholder arguments,
+// so we have to flatten things ourselves :-(
+function _fsrange_embed_placeholders($template, $args) {
+  _db_query_callback($args, TRUE);
+  return preg_replace_callback(DB_QUERY_REGEXP, '_db_query_callback', $template);
+}
+
+

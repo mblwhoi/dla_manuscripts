@@ -1,0 +1,73 @@
+<?php
+// $Id: fsrange_taxonomy.module,v 1.1.2.1 2009/09/09 13:21:28 zyxware Exp $
+
+/**
+ * @file
+ * Provides taxonomy range-capable fields.
+ */
+
+/**
+ * Implementation of hook_fsrange_fields()
+ *
+ * Defines some fields on behalf of Core.
+ */
+function fsrange_taxonomy_fsrange_fields() {
+  $fields = array();
+  $fields['term_data_name'] = array(
+    'handler' => 'fsrange_taxonomy_handler',
+    'label' => t('Node: Terms'),
+    'group' => t('Textual fields'),
+  );
+  return $fields;
+}
+
+// The 'fsrange_text_handler' class is defined in the 'fsrange_text' module,
+// which is not yet loaded at this point.
+require_once('./'. drupal_get_path('module', 'fsrange') .'/fsrange_text.module');
+
+class fsrange_taxonomy_handler extends fsrange_text_handler {
+
+  /**
+   * Overrides base. Adds the taxonomy tables.
+   */
+  function join_table(&$query) {
+    static $unique = 1; 
+    $term_node = $query->add_table('term_node', 'nid', 'n', 'nid', 'term_node_fsrange_'. $unique++);
+    $term_data = $query->add_table('term_data', 'tid', $term_node, 'tid', 'term_data_fsrange_'. $unique++);
+    $query->add_where("$term_data.vid IN (". join(',', $this->options['vocabularies']) .")");
+    return array( "$term_data.name" );
+  }
+  
+  /**
+   * Overrides base. Adds a vocabulary selector to the options form.
+   */
+  function options_form(&$form) {
+    $options = array();
+    foreach (taxonomy_get_vocabularies() as $vid => $vocab) {
+      $options[$vid] = $vocab->name;
+    }
+    $form['vocabularies'] = array(
+      '#type' => 'select',
+      '#title' => t('Vocabulary'),
+      '#description' => t("Choose the vocabulary from which terms will be taken for this facet. Note that you are allowed to choose more than one vocabulary, but this probably won't make a lot of sense."),
+      '#options' => $options,
+      '#multiple' => TRUE,
+      '#default_value' => $this->options['vocabularies'],
+      '#required' => TRUE,
+      '#size' => 4,
+    );
+    parent::options_form($form);
+  }
+  
+  /**
+   * Overrides base. Declares the 'vocabularies' option.
+   */
+  function get_default_options() {
+    $options = parent::get_default_options();
+    $options += array(
+      'vocabularies' => array(),
+    );
+    return $options;
+  }
+}
+

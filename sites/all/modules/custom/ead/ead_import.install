@@ -1,0 +1,114 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ * Schema definitions install/update/uninstall hooks.
+ */
+
+/**
+ * Implementation of hook_schema().
+ */
+function ead_import_schema() {
+  $schema = array();
+
+  // schema for ead_import_child_ancestor table
+  $schema['ead_import_child_ancestor'] = array(
+    'description' => t('Stores child-ancestor relationships for EAD item.  Used by EAD Import'),
+    'fields' => array(
+      'child_nid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'description' => t("Composite Primary Key: The child item's nid."),
+      ),
+      'ancestor_nid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'description' => t("Composite Primary Key: The nid of a child's ancestor."),
+      ),
+    ),
+    'primary key' => array('child_nid','ancestor_nid'),
+    'indexes' => array(
+    ),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implementation of hook_install().
+ */
+function ead_import_install() {
+  // Create tables.
+  drupal_install_schema('ead_import');
+
+  // create vocabulary
+  
+  // include term_fields module
+  module_load_include('inc', 'term_fields', 'term_fields.admin');
+
+  foreach($vocs = __get_ead_import_vocabularies() as $voc){
+
+    taxonomy_save_vocabulary(&$voc);
+
+    // create path field for vocabulary terms to use
+    $form_state = array(
+      'values' => array(
+        'vid' => $voc['vid'],
+        'fid' => "path",
+        'title' => "Path",
+        'description' => "Drupal path to be used for term links",
+        'type' => 'textfield',
+        'op' => 'Save',
+      ),
+    );
+
+    drupal_execute("term_fields_admin_new", &$form_state);
+
+  }
+
+}
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function ead_import_uninstall() {
+  
+  // remove vocabularies
+  $installedVocs = taxonomy_get_vocabularies();
+  $ead_vocabs = __get_ead_import_vocabularies();
+  $ead_vocab_names = array();
+  foreach($ead_vocabs as $name => $ead_vocab){
+    $ead_vocab_names[] = $name;
+  }
+  foreach($installedVocs as $voc){
+    if(in_array($voc->name, $ead_vocab_names)){
+      taxonomy_del_vocabulary($voc->vid);
+    }
+  }
+
+  // Remove tables.
+  drupal_uninstall_schema('ead_import');
+}
+
+
+function __get_ead_import_vocabularies(){
+  $arrVocabs = array();
+  $arrVocabs['Collections'] = array(
+    'name' => 'Collections',
+    'multiple' => 1,
+    'required' => 0,
+    'hierarchy' => 1,
+    'relations' => 0,
+    'module' => 'ead_import',
+    'weight' => 0,
+    'nodes' => array(
+      'ead_collection' => 1,
+      'ead_component' => 1
+    ),
+  );
+
+  return $arrVocabs;
+}

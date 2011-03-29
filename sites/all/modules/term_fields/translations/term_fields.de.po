@@ -1,0 +1,351 @@
+# $Id: term_fields.de.po,v 1.1.2.3 2009/12/09 23:52:23 hass Exp $
+#
+# LANGUAGE translation of Drupal (general)
+# Copyright YEAR NAME <EMAIL@ADDRESS>
+# Generated from files:
+#  term_fields.admin.inc,v 1.4.2.3 2009/12/01 09:33:35 bprod
+#  term_fields.module,v 1.7.2.6 2009/12/02 08:49:38 bprod
+#  term_fields.views.inc,v 1.4.2.2 2009/12/01 09:33:35 bprod
+#  term_fields.info,v 1.1 2009/01/28 02:41:09 archard
+#  term_fields_handler_field.inc,v 1.1.2.1 2009/12/01 09:33:35 bprod
+#  term_fields_handler_field_date.inc,v 1.1.2.1 2009/12/01 09:33:35 bprod
+#  term_fields_handler_field_numeric.inc,v 1.1.2.1 2009/12/01 09:33:35 bprod
+#  term_fields_handler_field_textarea.inc,v 1.1.2.1 2009/12/01 09:33:35 bprod
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: German translation of term fields module\n"
+"POT-Creation-Date: 2009-12-10 00:51+0100\n"
+"PO-Revision-Date: 2009-12-10 00:52+0100\n"
+"Last-Translator: Alexander Haß\n"
+"Language-Team: Alexander Hass\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n!=1)\n"
+"X-Poedit-Language: German\n"
+"X-Poedit-Country: GERMANY\n"
+
+#: term_fields.admin.inc:22
+msgid "Field"
+msgstr "Feld"
+
+#: term_fields.admin.inc:22;46
+msgid "Vocabulary"
+msgstr "Vokabular"
+
+#: term_fields.admin.inc:22;67;251
+msgid "Description"
+msgstr "Beschreibung"
+
+#: term_fields.admin.inc:22
+msgid "Operations"
+msgstr "Operationen"
+
+#: term_fields.admin.inc:27
+msgid "There are no fields defined yet."
+msgstr "Es sind noch keine Felder vorhanden."
+
+#: term_fields.admin.inc:48
+msgid "Choose a vocabulary to assign this field to. Only terms in this vocabulary will be able to use this field. Cannot be changed later."
+msgstr "Ein Vokabular auswählen, dem dieses Feld zugewiesen wird. Nur Begriffe in diesem Vokabular können dieses Feld verwenden. Es kann später nicht mehr geändert werden."
+
+#: term_fields.admin.inc:52
+msgid "Field ID"
+msgstr "Feld-ID"
+
+#: term_fields.admin.inc:53
+msgid "The machine-readable name of the field. This name must contain only lowercase letters, numbers, and underscores. This name cannot be changed."
+msgstr "Der maschinenlesbare Name des Feldes. Dieser Name darf nur Kleinbuchstaben, Zahlen und Unterstriche enthalten. Dieser Name kann nicht geändert werden."
+
+#: term_fields.admin.inc:59;242
+msgid "Title"
+msgstr "Titel"
+
+#: term_fields.admin.inc:60
+msgid "A human-readable name to be used as the label for this field."
+msgstr "Ein Name der als Beschriftung für dieses Feld verwendet werden soll."
+
+#: term_fields.admin.inc:68
+msgid "Enter a short description of this field to explain what the field is used for."
+msgstr "Eine Kurzbeschreibung von diesem Feld angeben, um zu erklären wofür das Feld genutzt wird."
+
+#: term_fields.admin.inc:73;290
+msgid "Field type"
+msgstr "Feldtyp"
+
+#: term_fields.admin.inc:75;293
+msgid "Date"
+msgstr "Datum"
+
+#: term_fields.admin.inc:76;294
+msgid "File"
+msgstr "Datei"
+
+#: term_fields.admin.inc:77;295
+msgid "Integer"
+msgstr "Ganzzahl"
+
+#: term_fields.admin.inc:78;296
+msgid "Select list"
+msgstr "Auswahlliste"
+
+#: term_fields.admin.inc:79;297
+msgid "Text area (multiple rows)"
+msgstr "Textfeld (mehrere Zeilen)"
+
+#: term_fields.admin.inc:80;298
+msgid "Text field"
+msgstr "Textfeld"
+
+# not literally
+#: term_fields.admin.inc:82
+msgid "Define what type of field to use. Single line textboxes should be used for fields such as names and dates, while multi line textareas should be used for longer fields, such as biographies. Cannot be changed later."
+msgstr "Den Typ des Feldes festlegen. Einzeilige Textfelder können für Felder wie Namen und Termine verwendet werden, während mehrzeilige Textfelder für längere Felder wie Biografien verwendet werden sollten."
+
+#: term_fields.admin.inc:87;305
+msgid "Weight"
+msgstr "Reihenfolge"
+
+#: term_fields.admin.inc:89
+#, fuzzy
+msgid "Heavier weighted items get put at the bottom of lists."
+msgstr "Felder mit einer höheren Gewichtung, werden am Ende von Listen erscheinen."
+
+#: term_fields.admin.inc:93;212;315
+msgid "Save"
+msgstr "Speichern"
+
+#: term_fields.admin.inc:99
+msgid "You have to <a href=\"@add-vocabulary\">add a vocabulary</a> before you can add fields."
+msgstr "Damit Felder hinzugefügt werden können, muss ein <a href=\"@add-vocabulary\">Vokabular hinzugefügt</a> werden."
+
+#: term_fields.admin.inc:112
+msgid "The field ID must contain only lowercase letters, numbers, and underscores. It should also begin by an alphabetic character and cannot finish by an underscore."
+msgstr "Die Feld-ID darf nur Kleinbuchstaben, Zahlen und Unterstriche enthalten. Diese sollte außerdem mit einem Buchstaben beginnen und kann nicht mit einem Unterstrich abschließen."
+
+#: term_fields.admin.inc:120
+msgid "The field ID %fid cannot be used. It is either already being used by another field, or is a reserved internal name."
+msgstr "Die Feld-ID %fid kann nicht verwendet werden. Diese wird entweder schon von einem anderen Feld verwendet, oder entspricht einem reservierten internen Namen."
+
+#: term_fields.admin.inc:151
+msgid "The field %title (%fid) has been created."
+msgstr "Das Feld %title (%fid) wurde erstellt."
+
+#: term_fields.admin.inc:166
+msgid "You should now specify some options for your select field."
+msgstr "Mehrere Optionen für das Auswahlfeld eingeben."
+
+#: term_fields.admin.inc:191
+msgid "Date field format"
+msgstr "Datumsfeldformat"
+
+#: term_fields.admin.inc:192
+msgid "The format to be used when displaying date fields."
+msgstr "Das zu verwendende Format zur Anzeige von Datumsfeldern."
+
+#: term_fields.admin.inc:198
+msgid "Custom date format"
+msgstr "Benutzerdefiniertes Datumsformat"
+
+#: term_fields.admin.inc:200
+msgid "A user-defined date format. If set, it will be used instead of what is set in the Date field format field. Leave blank to disable. See the <a href=\"@url\">PHP manual</a> for available options."
+msgstr "Ein benutzerdefiniertes Datumsformat. Sobald konfiguriert, wird statt dem Datumsformat-Feldes diese Einstellung verwendet. Zum Deaktivieren leer lassen. Weitere Informationen zu den verfügbaren Optionen befinden sich im <a href=\"@url\">PHP Handbuch</a>."
+
+#: term_fields.admin.inc:205
+msgid "Fields per page"
+msgstr "Felder pro Seite"
+
+#: term_fields.admin.inc:206
+msgid "Number of fields to show per page on the fields administration page."
+msgstr "Die auf der Feldverwaltungsseite anzuzeigende Anzahl an Feldern pro Seite."
+
+#: term_fields.admin.inc:230
+msgid "The Fields per page value must be numeric."
+msgstr "Die Wert für die Felder pro Seite muss numerisch sein."
+
+#: term_fields.admin.inc:244
+msgid "You can change the title of this field here."
+msgstr "Hier kann der Titel des Feldes geändert werden."
+
+#: term_fields.admin.inc:253
+msgid "You can change the description of this field here."
+msgstr "Hier kann die Beschreibung des Feldes geändert werden."
+
+#: term_fields.admin.inc:258
+msgid "Allowed values list"
+msgstr "Zulässige Werteliste"
+
+#: term_fields.admin.inc:259
+msgid "The possible values this field can contain. Enter one value per line, in the format key|label. The key is the value that will be stored in the database, and it must match the field storage type (text). The label is optional, and the key will be used as the label if no label is specified."
+msgstr "Die möglichen Werte, die dieses Feld enthalten kann. Geben Sie pro Zeile einen Wert im Format „Schlüssel|Bezeichnung“ ein. Der Schüssel ist der Wert, welcher in der Datenbank gespeichert wird und muss dem Datentyp (text) des Feldes entsprechen. Der Schlüssel wird als Bezeichnung verwendet, wenn die optionale Bezeichnung nicht angegeben wird."
+
+#: term_fields.admin.inc:267
+msgid "Permitted file extensions"
+msgstr "Erlaubte Dateitypen"
+
+#: term_fields.admin.inc:268
+msgid "Extensions that users in this role can upload. Separate extensions with a space and do not include the leading dot."
+msgstr "Die Dateierweiterungen, die Benutzer dieser Rolle hochladen können. Erweiterungen müssen mit einem Leerzeichen voneinander abgetrennt und ohne vorangestellten Punkt angegeben werden."
+
+#: term_fields.admin.inc:275
+msgid "Maximum file size per upload"
+msgstr "Maximale Dateigröße pro Datei"
+
+#: term_fields.admin.inc:276
+msgid "The maximum size of a file a user can upload."
+msgstr "Die maximale Größe einer Datei, die ein Nutzer hochladen darf."
+
+#: term_fields.admin.inc:280
+msgid "MB"
+msgstr "MB"
+
+#: term_fields.admin.inc:283
+msgid "Your PHP settings limit the maximum file size per upload to %size."
+msgstr "Die PHP-Einstellungen beschränken die maximale Dateigröße pro Datei auf %size."
+
+#: term_fields.admin.inc:307
+#, fuzzy
+msgid "Fields weighted heavier appear at the bottom of lists."
+msgstr "Felder mit einer höheren Gewichtung, werden am Ende von Listen erscheinen."
+
+#: term_fields.admin.inc:319;333
+#: term_fields.module:68;157
+msgid "Delete"
+msgstr "Löschen"
+
+#: term_fields.admin.inc:322
+msgid "Edit %fid field"
+msgstr "Feld %fid bearbeiten"
+
+#: term_fields.admin.inc:362
+msgid "The field %fid has been updated."
+msgstr "Das Feld %fid wurde aktualisiert."
+
+#: term_fields.admin.inc:376
+msgid "Are you sure you want to delete the term field %fid?"
+msgstr "Soll das Begriffsfeld %fid wirklich gelöscht werden?"
+
+#: term_fields.admin.inc:378
+msgid "If you have any content left in this field, it will be lost. This action cannot be undone."
+msgstr "Sollte sich in diesem Feld irgendwelche Inhalte befinden, gehen diese verloren. Diese Aktion kann nicht rückgängig gemacht werden."
+
+#: term_fields.admin.inc:395
+msgid "The field %fid has been deleted."
+msgstr "Das Feld %fid wurde gelöscht."
+
+#: term_fields.module:165;551
+#: views/term_fields.views.inc:109
+msgid "@title (@fid)"
+msgstr "@title (@fid)"
+
+#: term_fields.module:171
+msgid "Current file: <a href=\"@filepath\">@filename</a>."
+msgstr "Aktuelle Datei: <a href=\"@filepath\">@filename</a>."
+
+# ???
+#: term_fields.module:181
+#, fuzzy
+msgid "There are no fields defined for the vocabulary that this term is a part of."
+msgstr "Es gibt keine Felder für dieses Vokabular, in dem dieser Begriff enthalten ist."
+
+#: term_fields.module:279
+msgid "Field %fid must be numeric. This field was not set."
+msgstr "Das Feld %fid muss numerisch sein. Das Feld wurde nicht gespeichert."
+
+#: term_fields.module:483
+msgid "Year"
+msgstr "Jahr"
+
+#: term_fields.module:484
+msgid "Month"
+msgstr "Monat"
+
+#: term_fields.module:485
+msgid "Day"
+msgstr "Tag"
+
+#: term_fields.module:504
+msgid "A value must be specified for month, day and year. If you want to make this field blank, unset all three fields."
+msgstr "Es muss ein Wert für den Tag, Monat und das Jahr angegeben werden. Soll dieses Feld leer gelassen werden, müssen die Werte für alle drei Felder zurückgesetzt werden."
+
+#: term_fields.module:554
+msgid "Edit"
+msgstr "Bearbeiten"
+
+#: term_fields.module:588
+msgid "@description"
+msgstr "@description"
+
+#: term_fields.module:589
+msgid "@description - *RAW*"
+msgstr "@description - *RAW*"
+
+#: term_fields.module:60
+msgid "administer term fields"
+msgstr "Begriffsfelder verwalten"
+
+#: term_fields.module:9
+msgid "Fields"
+msgstr "Felder"
+
+#: term_fields.module:11
+msgid "An overview of term fields."
+msgstr "Eine Übersicht an Begriffsfeldern."
+
+#: term_fields.module:17
+msgid "Add field"
+msgstr "Feld hinzufügen"
+
+#: term_fields.module:20
+msgid "Form used to create new term fields."
+msgstr "Formular zur Erstellung neuer Begriffsfelder."
+
+#: term_fields.module:26
+msgid "Settings"
+msgstr "Einstellungen"
+
+#: term_fields.module:29
+msgid "Form used to change field settings."
+msgstr "Formular zur Änderung neuer Begriffsfelder."
+
+#: term_fields.module:35
+msgid "Edit field"
+msgstr "Feld bearbeiten"
+
+#: term_fields.module:38
+msgid "Form used to edit term fields."
+msgstr "Formular zur Bearbeitung neuer Begriffsfelder."
+
+#: term_fields.module:44
+msgid "Delete field"
+msgstr "Feld löschen"
+
+#: term_fields.module:47
+msgid "Form used to delete term fields."
+msgstr "Formular zum Löschen neuer Begriffsfelder."
+
+#: term_fields.info:0
+msgid "Term Fields"
+msgstr "Begriffsfelder"
+
+# not literally
+#: term_fields.info:0
+msgid "Allows adminitrators to define fields for taxonomy terms in the same way that CCK allows administrators to define fields for nodes."
+msgstr "Bietet Administratoren die Möglichkeit für Taxonomie-Begriffe Felder auf die gleiche Art und Weise zu erstellen, wie CCK die Erstellung von Feldern für Beiträge ermöglicht."
+
+#: views/term_fields.views.inc:11
+msgid "Term fields"
+msgstr "Begriffsfelder"
+
+#: views/term_fields.views.inc:110
+msgid "The value of %fid for this particular term."
+msgstr "Der Wert von %fid für diesen einzelnen Begriff."
+
+#: views/term_fields_handler_field.inc:28
+#: views/term_fields_handler_field_date.inc:30
+#: views/term_fields_handler_field_numeric.inc:28
+#: views/term_fields_handler_field_textarea.inc:28
+msgid "Link this field to its term"
+msgstr "Dieses Feld mit dem Begriff verknüpfen"
+

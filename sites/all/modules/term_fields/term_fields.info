@@ -1,0 +1,13 @@
+; $Id: term_fields.info,v 1.1 2009/01/28 02:41:09 archard Exp $
+
+name = Term Fields
+description = Allows adminitrators to define fields for taxonomy terms in the same way that CCK allows administrators to define fields for nodes.
+core = 6.x
+version = "6.x-1.0"
+dependencies[] = taxonomy
+; Information added by drupal.org packaging script on 2010-10-28
+version = "6.x-1.15"
+core = "6.x"
+project = "term_fields"
+datestamp = "1288264533"
+

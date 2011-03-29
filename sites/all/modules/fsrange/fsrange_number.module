@@ -1,0 +1,56 @@
+<?php
+// $Id: fsrange_number.module,v 1.1.2.1 2009/09/09 13:21:28 zyxware Exp $
+
+/**
+ * @file
+ * Provides numeric range-capable fields.
+ */
+
+/**
+ * Implementation of hook_fsrange_fields()
+ *
+ * Defines some fields on behalf of Core.
+ */
+function fsrange_number_fsrange_fields() {
+  // No obvious numeric fields in core.
+  // Actually, there are several: # of comments, # of views (statistics module), etc. TODO.
+}
+
+/**
+ * Implementation of hook_fsrange_fields(),
+ * on behalf of CCK's Number module.
+ */
+function number_fsrange_fields() {
+  $fields = array();
+  foreach (content_fields() as $field) {
+    if ($field['type'] == 'number_integer' || $field['type'] == 'number_decimal') {
+      $db_info = content_database_info($field);
+      $fields[$field['field_name']] = array(
+        'table' => $db_info['table'],
+        'field' => $db_info['columns']['value']['column'],
+        'handler' => 'fsrange_number_handler',
+        'cck_fieldname' => $field['field_name'],
+        'label' => $field['widget']['label'] .' ('. $field['field_name'] .')',
+        'group' => t('Numeric fields'),
+      );
+    }
+  }
+  return $fields;
+}
+
+require_once('./'. drupal_get_path('module', 'fsrange') .'/fsrange_basic_handler.inc');
+
+class fsrange_number_handler extends fsrange_basic_handler {
+  function validate_range($range, $parent_range, &$errors) {
+    $from = $range['from']; // typing shortcuts
+    $to = $range['to'];
+    foreach (array($from, $to) as $value) {
+      if ($value != 'inf' && $value != '-inf' && !is_numeric($value)) {
+        $errors[] = t("Invalid numeric value '%value' found at line @line", array('%value' => $value, '@line' => $range['line_number']));
+      }
+    }
+    if (is_numeric($from) && is_numeric($to) && $from > $to) {
+      $errors[] = t("Left number must be lower than the right number, at line @line", array('@line' => $range['line_number']));
+    }
+  }
+}

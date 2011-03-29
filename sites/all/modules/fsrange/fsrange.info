@@ -1,0 +1,13 @@
+; $Id: fsrange.info,v 1.1.2.1 2009/09/09 13:21:28 zyxware Exp $
+name = Faceted Search Ranges
+description = Provides ranges of values as facet categories
+package = Faceted Search
+dependencies[] = faceted_search
+core = 6.x
+
+; Information added by drupal.org packaging script on 2009-09-10
+version = "6.x-1.x-dev"
+core = "6.x"
+project = "fsrange"
+datestamp = "1252541572"
+

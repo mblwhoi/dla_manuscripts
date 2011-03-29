@@ -1,0 +1,77 @@
+<?php
+// $Id: fsrange_text.module,v 1.1.2.1 2009/09/09 13:21:28 zyxware Exp $
+
+/**
+ * @file
+ * Provides textual range-capable fields.
+ */
+
+/**
+ * Implementation of hook_fsrange_fields()
+ *
+ * Defines some fields on behalf of Core.
+ */
+function fsrange_text_fsrange_fields() {
+  $fields = array();
+  $fields['node_title'] = array(
+    'table' => 'node',
+    'field' => 'title',
+    'handler' => 'fsrange_text_handler',
+    'label' => t('Node: Title'),
+    'group' => t('Textual fields'),
+  );
+  $fields['user_name'] = array(
+    'table' => 'users',
+    'field' => 'name',
+    'join_info' => array(
+      'left' => array(
+        'field' => 'uid',
+      ),
+      'right' => array(
+        'field' => 'uid',
+      ),
+    ),
+    'handler' => 'fsrange_text_handler',
+    'label' => t('Node: Author Name'),
+    'group' => t('Textual fields'),
+  );
+  return $fields;
+}
+
+/**
+ * Implementation of hook_fsrange_fields(),
+ * on behalf of CCK's Text module.
+ */
+function text_fsrange_fields() {
+  $fields = array();
+  foreach (content_fields() as $field) {
+    if ($field['type'] == 'text') {
+      $db_info = content_database_info($field);
+      $fields[$field['field_name']] = array(
+        'table' => $db_info['table'],
+        'field' => $db_info['columns']['value']['column'],
+        'handler' => 'fsrange_text_handler',
+        'cck_fieldname' => $field['field_name'],
+        'label' => $field['widget']['label'] .' ('. $field['field_name'] .')',
+        'group' => t('Textual fields'),
+      );
+    }
+  }
+  return $fields;
+}
+
+require_once('./'. drupal_get_path('module', 'fsrange') .'/fsrange_basic_handler.inc');
+
+class fsrange_text_handler extends fsrange_basic_handler {
+  /**
+   * Overrides base. Provides additional validation for ranges typed in by user.
+   */
+  function validate_range($range, $parent_range, &$errors) {
+    $from = $range['from']; // shortcuts
+    $to = $range['to'];
+    if ($from != '-inf' && $to != 'inf' && $from > $to) {
+      $errors[] = t('Left string must be lower, lexicographically, than the right string, at line @line', array('@line' => $range['line_number']));
+    }
+  }
+}
+

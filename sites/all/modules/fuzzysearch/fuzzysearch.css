@@ -1,0 +1,37 @@
+/*  Search Form Style */
+#fuzzysearch-form .search-form{
+  margin: 10px 0 8px 0;
+}
+
+#fuzzysearch-form .search-form .form-item{
+  float: left;
+  width: 280px;
+  margin:0;
+  padding: 0;
+}
+
+#fuzzysearch-form input{
+  margin: 0;
+}
+
+#fuzzysearch-form #edit-submit{
+  margin: 15px 0 0 0;
+  padding: 1px 8px;
+}
+
+/*  Sample Classes for Results  */
+
+/*  results wrapper  */
+dl.search-results{
+  
+}
+
+/*  node title text  */
+dt.title{
+  
+}
+
+/*  teaser text  */
+dl.search-results dd{
+  
+}

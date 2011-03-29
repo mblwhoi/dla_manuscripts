@@ -1,0 +1,142 @@
+$Id: API.txt,v 1.1.2.1 2009/09/09 13:21:28 zyxware Exp $
+
+This document probably contains typos and grammatical errors. It's a quick
+draft I haven't yet revised.
+
+
+Introduction
+------------
+
+To understand the source code of this package you need to get acquainted
+with two concepts: (1) Range IDs; (2) Handlers.
+
+Note that the word "range", used throughout this document, could be
+substituted by the word "category". I prefer the word "range" here, and
+in the source code, because it also conveys a most relevant meaning and
+makes the text easier to follow.
+
+Range ID
+--------
+
+Let's suppose we've defined the following ranges for our facet:
+
+    0..10        | Cheap ($0 to $10)
+      0..1]      | Dirt cheap (1 dollar or less)
+    10..80       | Medium ($10 to $80)
+    80..inf      | Expensive ($80 and up)
+      1000..inf  | Really expensive ($1000 and up)
+      10000..inf | Really really expensive ($10,000 and up)
+
+Now, what will happen if the user clicks the "Really expensive" range?
+Some datum will be passed along the URL and will be used to construct
+the new view. This datum is the range ID. In our "Really expensive" case
+it would be "R-2-0".
+
+A range ID identifies a range. The most useful trait of a range ID is,
+that, given a range ID, we can infer all the hierarchy levels leading to
+it. For example, when we have a "R-2-0" in our hands the first thing we
+see is that we're dealing with two levels: '2' and '0'. '2' represents
+the '80..inf' range. That's because it's the third top-level range and
+so its index is '2' (Remember: in PHP counting is zero-based). The next
+level is '0', meaning the first range ...inside the '80..inf' range.
+
+Some more examples: The Range ID of "Medium" is "R-1". That of "Dirt
+cheap" is "R-0-1".
+
+However, you must not parse a range ID yourself; You must not assume
+anything about how a range ID looks like, because handlers may format it
+however they wish. We broke this rule above, but that was only for the
+sake of the discussion.
+
+In other words, a range ID is a black box for you, and should be
+accessed through the following functions only:
+
+  $handler->range_id__get_levels($range_id)  # Returns an array of levels.
+  
+  $handler->range_id__from_levels($levels)   # Given a levels array, returns
+                                             # the range ID.
+
+Functions dealing with range IDs have the "range_id__" prefix. The "__"
+somewhat resembles the "::" scope operator, and is a style borrowed from
+Views 2. However, you most probably won't have to use any of these
+function, because things are already handled for you.
+
+Was it necessary?
+-----------------
+
+You may ask yourself: is the concept of range IDs necessary? Couldn't we
+do without? Couldn't we just pass the range string itself, "80..inf", in
+the URL?
+
+I don't have a definite answer. Perhaps it was a bad decision.
+Introducing the range ID mechanism seems like introducing a
+complication, but I'm not sure doing without would have saved writing
+some code.
+
+One drawback of range IDs is that the users lose the freedom of tweaking
+them (in the URLs) and constructing their own ranges.
+
+Range ID with leaves
+--------------------
+
+Our discussion of range IDs is not yet complete. This module has the
+feature of displaying the values existing within the range (it's the
+checkbox "Display the values themselves, as categories, when a
+deepest-level range is browsed").
+
+So we have to devise a way to represent not only ranges but values
+within too.
+
+This is done by attaching a "leaf" to the range ID. The "leaf" is simply
+the value. The leaf is separated from the levels by a "#" sign (chosen
+because it's akin to HTML's and has about the same meaning). So, for
+example, if the range ID "R-3" to represent all node titles whose values
+are between 'J' to 'M', then "R-3#Living with cockroaches" would
+represent all nodes with this specific title.
+
+Again, you're not to parse the leaf yourself. Instead, you should use:
+
+  $handler->range_id__contains_leaf($range_id)
+  $handler->range_id__get_leaf($range_id)
+  $handler->range_id__remove_leaf($range_id)
+
+However, you most probably won't have to use any of these function,
+because things are already handled for you.
+
+Handlers
+--------
+
+The "Faceted Search" module requires programmers to define their Facet
+and Category classes.
+
+The "Faceted Search Ranges" module implements the above classes already.
+It factors out the knowledge described earlier in this document into a
+special class, 'fsrange_handler' --known in this document as "a
+handler".
+
+For example, it is this handler that has a 'get_range_id_formula()'
+method that generates the SQL 'CASE' expression demonstrated in the
+README.txt. It also hosts the infamous 'range_id__get_levels()' and
+'range_id__from_levels()'.
+
+But this 'fsrange_handler' class is mostly abstract. A more tangible
+implementation is needed for most purposes, and, indeed, this module
+provides a practical derived class, 'fsrange_basic_handler'.
+
+The "Numeric Range Facets", "Textual Range Facets", and "Date Range
+Facets" modules contain slight modifications of that
+'fsrange_basic_handler' class.
+
+Things borrowed from Views 2.x
+------------------------------
+
+The design of the handler class somewhat resembles that of Views 2's
+handlers. Most notably it contains 'definition' and 'options'. It also
+has the 'options_form()' method.
+
+hook_fsrange_fields()
+---------------------
+
+Modules should announce their range-capable fields via
+hook_fsrange_fields(). It's this hook that connects between fields to
+handlers.

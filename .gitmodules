@@ -1,3 +1,12 @@
 [submodule "drupal_core"]
 	path = drupal_root
 	url = git://github.com/adorsk-whoi/drupal_core_symlinks.git
+[submodule "sites/all/modules/custom/ldap_authentication"]
+	path = sites/all/modules/custom/ldap_authentication
+	url = git://github.com/adorsk-whoi/drupal_ldap_authentication.git
+[submodule "sites/all/modules/custom/whoi_ldap_feature"]
+	path = sites/all/modules/custom/whoi_ldap_feature
+	url = https://github.com/adorsk-whoi/WHOI-LDAP-Feature
+[submodule "sites/all/themes/custom/dla"]
+	path = sites/all/themes/custom/dla
+	url = git://github.com/adorsk-whoi/dla_theme.git

@@ -1,0 +1,58 @@
+/* styling for collection gallery */
+
+
+.view-collection-gallery{
+}
+
+/* class for properly sizing parents of float elements */
+
+.view-collection-gallery .clearfix:after {
+    clear:both;
+    content:".";
+    display:block;
+    height:0;
+    visibility:hidden;
+}
+
+.collection_gallery_row{
+    position: relative;
+    padding-left: 150px; /* size of image div*/
+    padding-top: 1em;
+    padding-bottom: 1em;
+}
+
+.collection_gallery_row .image{
+    float: left;
+    width: 150px;
+    height: 150px;
+    position: relative;
+    margin-left: -150px;
+}
+
+.collection_gallery_row .image img{
+    width: 100%;
+    height: 100%;
+}
+
+.collection_gallery_row .content{
+    float: left;
+    position: relative;
+    width: 100%;
+    font-weight: normal;
+    font-size: inherit;
+    font-style: normal;
+    text-decoration: none;
+    padding-left: 2em;
+    padding-top: .5em;
+}
+
+.collection_gallery_row .content .head{
+    font-weight: bold;
+    font-size: larger;
+}
+
+.collection_gallery_row .content .dates > .head{
+    font-weight: normal;
+    font-size: inherit;
+    font-style: italic;
+}

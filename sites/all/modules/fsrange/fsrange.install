@@ -1,0 +1,40 @@
+<?php
+// $Id: fsrange.install,v 1.1.2.1 2009/09/09 13:21:28 zyxware Exp $
+
+/**
+ * Implementation of hook_install().
+ */
+function fsrange_install() {
+  switch ($GLOBALS['db_type']) {
+    case 'mysql':
+    case 'mysqli':
+      db_query("CREATE TABLE {fsrange_facets} (
+        rfid int(11) NOT NULL auto_increment,
+        field_name varchar(128) NOT NULL default '',
+        label varchar(128) NOT NULL default '',
+        description varchar(255) NOT NULL default '',
+        options text NOT NULL default '',
+        PRIMARY KEY (rfid)
+      ) /*!40100 DEFAULT CHARACTER SET utf8 */");
+      break;
+
+    case 'pgsql':
+      db_query("CREATE TABLE {fsrange_facets} (
+        rfid serial,
+        field_name varchar(128) NOT NULL default '',
+        label varchar(128) NOT NULL default '',
+        description varchar(255) NOT NULL default '',
+        options text NOT NULL default '',
+        PRIMARY KEY (rfid)
+      )");
+      break;
+  }
+}
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function fsrange_uninstall() {
+  db_query('DROP TABLE {fsrange_facets}');
+}
+

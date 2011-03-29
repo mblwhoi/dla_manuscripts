@@ -1,0 +1,145 @@
+<?php
+// $Id: fuzzysearch.install,v 1.13.2.1 2010/05/17 20:16:16 awolfey Exp $
+
+/**
+ * @file
+ * Install file for fuzzysearch module.
+ */
+
+/**
+ * Implementation of hook_schema().
+ */
+function fuzzysearch_schema() {
+  $schema['fuzzysearch_index_queue'] = array(
+    'fields' => array(
+      'nid' => array(
+        'description' => 'The primary identifier for a node queued for indexing.',
+        'type'     => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'module' => array(
+        'type' => 'varchar',
+        'length' => 64,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => "The module that added this nid to the queue.",
+      ),
+      'timestamp' => array(
+        'description' => 'The Unix timestamp when the node was added to the queue.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0),
+      ),
+    'indexes' => array(
+      'nid' => array('nid'),
+    ),
+  );
+
+  $schema['fuzzysearch_index'] = array(
+    'fields' => array(
+      'id' => array(
+        'description' => 'The ngram id.',
+        'type'     => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'nid' => array(
+        'description' => 'The ngrams nid,',
+        'type'     => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'word_id' => array(
+        'description' => 'The word id.',
+        'type'     => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'ngram' => array(
+        'description' => 'The ngram.',
+        'type' => 'varchar',
+        'length' => 6,
+        'not null' => TRUE,
+        'default' => ''
+      ),
+      'completeness' => array(
+        'description' => 'Completeness.',
+        'type'     => 'float',
+        'not null' => TRUE,
+      ),
+      'score' => array(
+        'description' => 'Score.',
+        'type'     => 'numeric',
+        'precision' => 8,
+        'scale' => 2,
+        'not null' => TRUE,
+      ),
+    ),
+    'indexes' => array(
+      'ngram' => array('ngram'),
+      'completeness' => array('completeness'),
+    ),
+      'primary key' => array('id'),
+  );
+
+return $schema;
+}
+
+function fuzzysearch_install() {
+  // Create tables.
+  drupal_install_schema('fuzzysearch');
+  variable_set('fuzzysearch_ngram_length', 3);
+  variable_set('fuzzysearch_completeness', 40);
+
+  // Queue all content for indexing.
+  $query = db_query("SELECT nid FROM {node}");
+  while ($row = db_fetch_object($query)) {
+    $queue = db_query("SELECT * FROM {fuzzysearch_index_queue} WHERE nid = %d", $row->nid);
+    if (!db_result($queue)) {
+      db_query("INSERT INTO {fuzzysearch_index_queue} (nid, module, timestamp) VALUES (%d, '%s', %d)", $row->nid, $module, time());
+    }
+  }
+  drupal_set_message('Fuzzysearch module installed successfully.');
+  drupal_set_message('Content queued for indexing, please run cron to begin indexing.');
+}
+
+function fuzzysearch_uninstall() {
+  // Remove tables.
+  drupal_uninstall_schema('fuzzysearch');
+
+  // Delete settings from variable table.
+  $sql = "DELETE FROM {variable} WHERE name LIKE 'fuzzysearch%'";
+  db_query($sql);
+  drupal_set_message('Fuzzysearch module successfully removed.');
+}
+
+function fuzzysearch_requirements() {
+  include_once './includes/unicode.inc';
+  // Notify that Mbstring extension is necessary for multibyte characters.
+  $t = get_t();
+
+  $libraries = array(
+    UNICODE_SINGLEBYTE => $$t('Multibyte characters not supported in searching.'),
+    UNICODE_MULTIBYTE =>  $t('Multibyte characters are supported in searching.'),
+    UNICODE_ERROR => $t('Multibyte characters not supported in searching.'),
+  );
+  $severities = array(
+    UNICODE_SINGLEBYTE => REQUIREMENT_WARNING,
+    UNICODE_MULTIBYTE => REQUIREMENT_OK,
+    UNICODE_ERROR => REQUIREMENT_ERROR,
+  );
+  list($library, $description) = _unicode_check();
+
+  $requirements['fuzzysearch'] = array(
+    'title' => $t('Fuzzysearch module'),
+    'value' => $libraries[$library],
+  );
+  if ($description) {
+    $requirements['fuzzysearch']['description'] = $description;
+  }
+
+  $requirements['fuzzysearch']['severity'] = $severities[$library];
+
+  return $requirements;
+}

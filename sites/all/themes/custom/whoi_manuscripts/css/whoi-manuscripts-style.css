@@ -1,0 +1,16 @@
+@import url('ead-style.css');
+@import url('faceted-search-results-style.css');
+@import url('collection-gallery-style.css');
+
+/* hide drupal search */
+#search{
+    display: none;
+}
+
+/* float the header panel to the right */
+.header_panel{
+    float: right;
+}
+
+
+
