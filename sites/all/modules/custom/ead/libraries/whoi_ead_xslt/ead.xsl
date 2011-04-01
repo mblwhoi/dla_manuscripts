@@ -74,7 +74,7 @@
 	
 	<!-- brief archive description -->
 	<div class="brief_arch_desc">
-	  <div class="eadid">Archival Collection <xsl:value-of select="eadheader/eadid"/></div>
+	  <div class="eadid">Manuscript Collection <xsl:value-of select="eadheader/eadid"/></div>
 	  <div class="physdesc"><xsl:value-of select="archdesc/did/physdesc"/></div>
 	</div>
 	
