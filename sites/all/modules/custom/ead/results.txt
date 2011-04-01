@@ -1,7 +1,0 @@
-creating dom doc
-memory used: 752
-
-doing transformation
-memory used: 0
-doing recursion
-total recursion memory used: 23732
