@@ -36,7 +36,7 @@ class EadImportFeedsCollectionNodeProcessor extends FeedsProcessor{
     // re-create the dom object
     // @todo: CLEAN THIS UP!  SHOULD REALLY BE A FIRST-TIME FUNCTION, TO DO INIT
     if (! $this->create_ead_dom($batch) ){
-        drupal_set_message("Could not read EAD File.  Nothing has been changed.");
+        drupal_set_message("Could not read EAD File.  Please check the file and then re-process it.");
         return FEEDS_BATCH_COMPLETE;
     }
 

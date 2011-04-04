@@ -19,7 +19,7 @@ function date_facets_cck_facets_collect(&$facets, $field, $domain, $env, $arg = 
   if ($field['type'] == 'date' || $field['type'] == 'datestamp') {
     $facet_class = $field['type'] .'_facet';
     $category_class = $field['type'] .'_facet_category';
-  
+
     switch ($domain) {
       case 'facets':
         $facets[] = new $facet_class($field);
@@ -78,7 +78,7 @@ function date_facets_cck_facets_collect(&$facets, $field, $domain, $env, $arg = 
               $year = date_format_date($date, 'custom', 'Y');
               $month = date_format_date($date, 'custom', 'n');
               $day = date_format_date($date, 'custom', 'j');
-              
+
               $active_path = array(
                 new datestamp_facet_category($field, $year, NULL, NULL),
                 new datestamp_facet_category($field, $year, $month, NULL),
@@ -101,7 +101,7 @@ function date_facets_cck_facets_collect(&$facets, $field, $domain, $env, $arg = 
  */
 class date_facet extends cck_facet {
   /**
-   * Constructor. 
+   * Constructor.
    *
    * @param $field
    *   The field corresponding to this facet.
@@ -145,10 +145,10 @@ class date_facet extends cck_facet {
       }
     }
   }
-  
+
   /**
    * Updates a query for retrieving the root categories of this facet and their
-   * associated nodes within the current search results. 
+   * associated nodes within the current search results.
    *
    * @param $query
    *   The query object to update.
@@ -185,10 +185,10 @@ class date_facet extends cck_facet {
 }
 
 /**
- * A facet category for Date fields. 
+ * A facet category for Date fields.
  */
 class date_facet_category extends cck_facet_category {
-  
+
   /**
    * Constructs a category for the specified date.
    *
@@ -217,24 +217,37 @@ class date_facet_category extends cck_facet_category {
    *   implementor is responsible to ensure adequate security filtering.
    */
   function get_label($html = FALSE) {
+
+    // Initialize date components
+    $y = 0;
+    $m = 1;
+    $d = 1;
+
+    // Set format.
     if (isset($this->_value['day'])) {
-      // Format date with YYYY-MM-DD.
-      $timestamp = gmmktime(0, 0, 0, (int)$this->_value['month'], (int)$this->_value['day'], (int)$this->_value['year']);
       $format = variable_get('date_facets_format_ymd', 'm/d/Y');
+      $d =$this->_value['day'];
     }
     elseif (isset($this->_value['month'])) {
-      // Format date with YYYY-MM.
-      $timestamp = gmmktime(0, 0, 0, (int)$this->_value['month'], 1, (int)$this->_value['year']);
       $format = variable_get('date_facets_format_ym', 'm/Y');
+      $m = $this->_value['month'];
     }
     elseif (isset($this->_value['year'])) {
-      // Format date with YYYY.
-      $timestamp = gmmktime(0, 0, 0, 1, 1, (int)$this->_value['year']);
       $format = variable_get('date_facets_format_y', 'Y');
+      $y = $this->_value['year'];
     }
-    if ($timestamp) {
-      return format_date($timestamp, 'custom', $format, 0);
+
+    // Make ISO 8601 date string.
+    $date_string = sprintf("%04d-%02d-%02dT00:00:00+00:00",$y, $m, $d);
+
+    // Make date via Date API.
+    $date_obj = date_make_date($date_string);
+
+    // Return formatted label.
+    if($date_obj){
+      return date_format_date($date_obj, 'custom', $format);
     }
+
   }
 
   /**
@@ -253,7 +266,7 @@ class date_facet_category extends cck_facet_category {
 
   /**
    * Updates a query for retrieving the subcategories of this category and their
-   * associated nodes within the current search results. 
+   * associated nodes within the current search results.
    *
    * This only needs to be overridden for hierarchical facets.
    *
@@ -266,7 +279,7 @@ class date_facet_category extends cck_facet_category {
     if (isset($this->_value['day'])) {
       return FALSE; // No subcategories.
     }
-    
+
     $db_info = _cck_facets_db_info($this->_field);
     $main_column = array_shift($db_info['columns']);
     $query->add_table($db_info['table'], 'vid', 'n', 'vid');
@@ -329,7 +342,7 @@ class date_facet_category extends cck_facet_category {
  */
 class datestamp_facet extends date_facet {
   /**
-   * Constructor. 
+   * Constructor.
    *
    * @param $field
    *   The field corresponding to this facet.
@@ -344,7 +357,7 @@ class datestamp_facet extends date_facet {
 
   /**
    * Updates a query for retrieving the root categories of this facet and their
-   * associated nodes within the current search results. 
+   * associated nodes within the current search results.
    *
    * @param $query
    *   The query object to update.
@@ -381,10 +394,10 @@ class datestamp_facet extends date_facet {
 }
 
 /**
- * A facet category for Date fields. 
+ * A facet category for Date fields.
  */
 class datestamp_facet_category extends date_facet_category {
-  
+
   /**
    * Constructs a category for the specified date.
    *
@@ -405,7 +418,7 @@ class datestamp_facet_category extends date_facet_category {
 
   /**
    * Updates a query for retrieving the subcategories of this category and their
-   * associated nodes within the current search results. 
+   * associated nodes within the current search results.
    *
    * This only needs to be overridden for hierarchical facets.
    *
@@ -418,7 +431,7 @@ class datestamp_facet_category extends date_facet_category {
     if (isset($this->_value['day'])) {
       return FALSE; // No subcategories.
     }
-    
+
     $db_info = _cck_facets_db_info($this->_field);
     $main_column = array_shift($db_info['columns']);
     $query->add_table($db_info['table'], 'vid', 'n', 'vid');
@@ -488,6 +501,6 @@ function _date_facets_check_date($year = NULL, $month = NULL, $day = NULL) {
   if (isset($day) && (!isset($month) || !is_numeric($month) || !is_numeric($day) || !checkdate($month, $day, $year))) {
     return FALSE;
   }
-  
+
   return TRUE;
-} 
+}
