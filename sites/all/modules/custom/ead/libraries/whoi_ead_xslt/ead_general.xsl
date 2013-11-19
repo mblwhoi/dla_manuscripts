@@ -255,7 +255,7 @@
 
 
 
-  <!--Formats ref elements-->
+  <!--Formats ref elements: this is a test of git-->
   <!-- NOTE: THIS IS JUST A QUICK FIX FOR WHOI-SPECIFIC EADS.  IT PROBABLY NEEDS SOME MORE LOGIC FOR GENERAL USE -->
   <xsl:template match="ref">
 
